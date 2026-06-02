@@ -2,9 +2,9 @@
 
 namespace HFlow\LaravelWorkflow\Tests;
 
+use HFlow\LaravelWorkflow\LaravelWorkflowServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Orchestra\Testbench\TestCase as Orchestra;
-use HFlow\LaravelWorkflow\LaravelWorkflowServiceProvider;
 
 class TestCase extends Orchestra
 {

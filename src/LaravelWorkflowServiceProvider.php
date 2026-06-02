@@ -2,9 +2,9 @@
 
 namespace HFlow\LaravelWorkflow;
 
+use HFlow\LaravelWorkflow\Commands\LaravelWorkflowCommand;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
-use HFlow\LaravelWorkflow\Commands\LaravelWorkflowCommand;
 
 class LaravelWorkflowServiceProvider extends PackageServiceProvider
 {
