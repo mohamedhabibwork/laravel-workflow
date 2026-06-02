@@ -1,17 +1,17 @@
 {
-    "name": ":vendor_slug/:package_slug",
-    "description": ":package_description",
+    "name": "mohamedhabibwork/laravel-workflow",
+    "description": "This is my package laravel-workflow",
     "keywords": [
-        ":vendor_name",
+        "HFlow",
         "laravel",
-        ":package_slug"
+        "laravel-workflow"
     ],
-    "homepage": "https://github.com/:vendor_slug/:package_slug",
+    "homepage": "https://github.com/mohamedhabibwork/laravel-workflow",
     "license": "MIT",
     "authors": [
         {
-            "name": ":author_name",
-            "email": "author@domain.com",
+            "name": "Mohamed Habib",
+            "email": "mohamedhabibwork@gmail.com",
             "role": "Developer"
         }
     ],
@@ -35,13 +35,13 @@
     },
     "autoload": {
         "psr-4": {
-            "VendorName\\Skeleton\\": "src/",
-            "VendorName\\Skeleton\\Database\\Factories\\": "database/factories/"
+            "HFlow\\LaravelWorkflow\\": "src/",
+            "HFlow\\LaravelWorkflow\\Database\\Factories\\": "database/factories/"
         }
     },
     "autoload-dev": {
         "psr-4": {
-            "VendorName\\Skeleton\\Tests\\": "tests/",
+            "HFlow\\LaravelWorkflow\\Tests\\": "tests/",
             "Workbench\\App\\": "workbench/app/"
         }
     },
@@ -63,10 +63,10 @@
     "extra": {
         "laravel": {
             "providers": [
-                "VendorName\\Skeleton\\SkeletonServiceProvider"
+                "HFlow\\LaravelWorkflow\\LaravelWorkflowServiceProvider"
             ],
             "aliases": {
-                "Skeleton": "VendorName\\Skeleton\\Facades\\Skeleton"
+                "LaravelWorkflow": "HFlow\\LaravelWorkflow\\Facades\\LaravelWorkflow"
             }
         }
     },
