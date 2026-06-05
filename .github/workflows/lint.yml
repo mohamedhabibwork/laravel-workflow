@@ -1,0 +1,50 @@
+name: lint
+
+on:
+  push:
+    paths:
+      - '**.php'
+      - '.github/workflows/lint.yml'
+      - 'pint.json'
+  pull_request:
+    paths:
+      - '**.php'
+      - '.github/workflows/lint.yml'
+      - 'pint.json'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pint:
+    name: Laravel Pint
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v4
+      - name: Run Pint (check mode)
+        run: ./vendor/bin/pint --test
+
+  phpstan:
+    name: PHPStan (level 5)
+    runs-on: ubuntu-latest
+    timeout-minutes: 5
+    steps:
+      - uses: actions/checkout@v6
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+      - name: Install composer dependencies
+        uses: ramsey/composer-install@v4
+      - name: Run PHPStan
+        run: ./vendor/bin/phpstan analyse --error-format=github

@@ -28,11 +28,11 @@ description: "Task list for Laravel Workflow Engine (P1–P3 user stories, 10 ta
 
 **Purpose**: Project initialization, dependency bumps, scaffold cleanup, CI scaffold.
 
-- [ ] T001 Bump `composer.json` dependency constraints in `/Users/habib/Herd/workflow/laravel-workflow/composer.json`: change `illuminate/contracts` from `^11.0||^12.0||^13.0` to `^10.0||^11.0||^12.0||^13.0` and broaden `orchestra/testbench` to `^11.0||^10.0||^9.0||^8.0` so Laravel 10 is testable
-- [ ] T002 Remove the `->hasViews()` call (and any view publishing tags) from `src/LaravelWorkflowServiceProvider.php` — the engine ships no UI
-- [ ] T003 [P] Add the matrix CI workflow at `.github/workflows/tests.yml` running Pest across Laravel {10, 11, 12, 13} × PHP {8.2, 8.3, 8.4} where supported
-- [ ] T004 [P] Create `.github/workflows/lint.yml` running Larastan level 5 + Pint on every push/PR
-- [ ] T005 [P] Clean placeholder directories in `src/` (keep `Commands/`, `Contracts/`, `Exceptions/`, `Facades/`, `QueryBuilder/`, `StateMachine/`, `States/`, `Tags/`; remove `ActivityRecorder/`, `ApproverResolver/`, `DataValidator/`)
+- [x] T001 Bump `composer.json` dependency constraints in `/Users/habib/Herd/workflow/laravel-workflow/composer.json`: change `illuminate/contracts` from `^11.0||^12.0||^13.0` to `^10.0||^11.0||^12.0||^13.0` and broaden `orchestra/testbench` to `^11.0||^10.0||^9.0||^8.0` so Laravel 10 is testable
+- [x] T002 Remove the `->hasViews()` call (and any view publishing tags) from `src/LaravelWorkflowServiceProvider.php` — the engine ships no UI
+- [x] T003 [P] Add the matrix CI workflow at `.github/workflows/tests.yml` running Pest across Laravel {10, 11, 12, 13} × PHP {8.2, 8.3, 8.4} where supported
+- [x] T004 [P] Create `.github/workflows/lint.yml` running Larastan level 5 + Pint on every push/PR
+- [x] T005 [P] Clean placeholder directories in `src/` (keep `Commands/`, `Contracts/`, `Exceptions/`, `Facades/`, `QueryBuilder/`, `StateMachine/`, `States/`, `Tags/`; remove `ActivityRecorder/`, `ApproverResolver/`, `DataValidator/`)
 
 ---
 
@@ -55,7 +55,7 @@ description: "Task list for Laravel Workflow Engine (P1–P3 user stories, 10 ta
 - [ ] T016 [P] Create the `LaravelWorkflow` facade at `src/Facades/LaravelWorkflow.php` returning `WorkflowEngine::class` from `getFacadeAccessor()`
 - [ ] T017 Wire `tests/TestCase.php`: uncomment the `loadMigrationsFrom(...)` line and call `$this->artisan('migrate')->run()` in `setUp()` so every Pest test starts from a freshly migrated SQLite database; also `defineDatabaseMigrations()` to load the published migration under Testbench
 - [ ] T018 Expand `tests/ArchTest.php` with the rules: no `dd`/`dump`/`ray`/`var_dump` anywhere; all classes in `src/Models/` are `final`; all classes in `src/Enums/` are `final`; all interfaces in `src/Contracts/` are `interfaces` (not classes); `src/Engines/WorkflowEngine.php` does not call `DB::raw()` directly; `src/Models/WorkflowHistory.php` declares `AppendOnlyHistory` trait; `src/Models/WorkflowHistory.php` has no `use SoftDeletes`; `src/Models/WorkflowHistory.php` does not declare `UPDATED_AT` (or sets it to `null`); the public `WorkflowEngine` class exposes the 14 documented methods
-- [ ] T019 [P] Add `.gitattributes` rule marking `database/migrations/`, `database/factories/`, `config/`, and `src/` as `export-ignore=false` so they are published to Packagist (replace existing stub if any)
+- [x] T019 [P] Add `.gitattributes` rule marking `database/migrations/`, `database/factories/`, `config/`, and `src/` as `export-ignore=false` so they are published to Packagist (replace existing stub if any)
 
 **Checkpoint**: Foundation ready — `php artisan migrate` in a Testbench workbench creates all 10 tables; the enums, models, exceptions, state machines, value objects, service container, facade, TestCase, and ArchTest guards are all in place. User story implementation can now begin in parallel.
 
