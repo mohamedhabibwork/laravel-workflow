@@ -1,5 +1,7 @@
 <?php
 
+declare(strict_types=1);
+
 namespace HFlow\LaravelWorkflow;
 
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;

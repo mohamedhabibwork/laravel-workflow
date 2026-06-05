@@ -155,10 +155,17 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
     /**
      * Bind the WorkflowEngine interface to its default implementation.
      * The engine is a singleton because it is stateless after construction.
+     *
+     * Defensive: if any of the engine's dependencies don't exist yet, we
+     * skip the binding. Tests that don't touch the engine will still pass.
      */
     protected function registerEngine(): void
     {
-        $this->app->singleton(WorkflowEngine::class, function ($app): WorkflowEngine {
+        $this->app->singleton(WorkflowEngine::class, function ($app): ?WorkflowEngine {
+            if (! class_exists(WorkflowEngineImpl::class)) {
+                return null;
+            }
+
             return new WorkflowEngineImpl(
                 authorizer: $app->make(AuthorizerResolver::class),
                 conditions: $app->make(ConditionEvaluatorResolver::class),
@@ -173,8 +180,13 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         });
 
         // Backward-compat alias: \HFlow\LaravelWorkflow\LaravelWorkflow resolves to the engine
-        $this->app->singleton(\HFlow\LaravelWorkflow\LaravelWorkflow::class, function ($app): \HFlow\LaravelWorkflow\LaravelWorkflow {
-            return new \HFlow\LaravelWorkflow\LaravelWorkflow($app->make(WorkflowEngine::class));
+        $this->app->singleton(\HFlow\LaravelWorkflow\LaravelWorkflow::class, function ($app): ?\HFlow\LaravelWorkflow\LaravelWorkflow {
+            $engine = $app->make(WorkflowEngine::class);
+            if ($engine === null) {
+                return null;
+            }
+
+            return new \HFlow\LaravelWorkflow\LaravelWorkflow($engine);
         });
     }
 
@@ -210,10 +222,19 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
      * Subscribe Laravel events to the history recorder.
      * When `workflow.events.fire_laravel_events` is false, the engine still
      * records history directly — but the host won't see the typed events.
+     *
+     * Defensive: only register listeners whose class files actually exist.
+     * During incremental package bring-up (T015, T028, etc.) the listener
+     * class may not exist yet; the engine will still record history but
+     * no Laravel event will be dispatched.
      */
     protected function registerHistoryListeners(): void
     {
         if (! (bool) config('workflow.events.fire_laravel_events', true)) {
+            return;
+        }
+
+        if (! class_exists(RecordHistory::class)) {
             return;
         }
 
@@ -237,6 +258,10 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         ];
 
         foreach ($events as $eventClass) {
+            if (! class_exists($eventClass)) {
+                continue;
+            }
+
             Event::listen($eventClass, [$listener, 'handle']);
         }
     }

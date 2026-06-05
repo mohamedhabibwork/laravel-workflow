@@ -21,15 +21,18 @@ use Orchestra\Testbench\TestCase as Orchestra;
  * Base TestCase for the laravel-workflow package.
  *
  * Wires the service provider, factory guessing, and a clean SQLite-in-memory
- * database with the combined workflow migration loaded. Provides ergonomic
- * helpers for common test scenarios (creating a workflow, starting an
- * instance, asserting history rows, etc.).
+ * database. Migration loading is OPT-IN: tests that need the workflow tables
+ * call `loadWorkflowMigrations()` in their setUp. Tests that don't (e.g.
+ * ArchTest, value-object unit tests) skip it entirely.
+ *
+ * Provides ergonomic helpers for common test scenarios (creating a workflow,
+ * starting an instance, asserting history rows, etc.).
  */
 class TestCase extends Orchestra
 {
     /**
-     * Whether the workflow_histories "tenancy disabled" test table was created.
-     * Some test helpers add a fake host `users` and `roles` table.
+     * Whether a fake host `users` table was created during the test.
+     * Some test helpers add this; we use it to make the helper idempotent.
      */
     protected bool $withHostUsersTable = false;
 
@@ -40,14 +43,14 @@ class TestCase extends Orchestra
         Factory::guessFactoryNamesUsing(
             fn (string $modelName) => 'HFlow\\LaravelWorkflow\\Database\\Factories\\'.class_basename($modelName).'Factory',
         );
-
-        $this->loadLaravelWorkflowMigrations();
     }
 
     /**
      * Run the single combined workflow migration against the in-memory test DB.
+     * Tests that need a migrated database should call this from their setUp()
+     * or from a `beforeEach()` hook in their Pest file.
      */
-    protected function loadLaravelWorkflowMigrations(): void
+    protected function loadWorkflowMigrations(): void
     {
         $migration = __DIR__.'/../database/migrations/2024_01_01_000000_create_workflow_table.php';
 
