@@ -161,6 +161,12 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         $configured = config($configKey);
         $binding = (is_string($configured) && $configured !== '') ? $configured : $defaultImpl;
 
+        // Defensive: only bind the contract impl if it actually exists on disk.
+        // During incremental bring-up, default impls may not exist yet.
+        if (! class_exists($binding)) {
+            return;
+        }
+
         $this->app->singleton($contract, $binding);
 
         // Register the resolver wrapper that delegates to the bound contract
@@ -172,6 +178,11 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
             CustomResolver::class => ResolverRegistry::class,
             default => throw new InvalidArgumentException("Unknown host contract: {$contract}"),
         };
+
+        // Skip the resolver binding if the resolver class doesn't exist yet.
+        if (! class_exists($resolverClass)) {
+            return;
+        }
 
         $this->app->singleton($resolverClass, fn ($app) => new $resolverClass($app->make($contract)));
     }
@@ -188,6 +199,22 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         $this->app->singleton(WorkflowEngine::class, function ($app): ?WorkflowEngine {
             if (! class_exists(WorkflowEngineImpl::class)) {
                 return null;
+            }
+
+            // Full Phase 5+ engine has constructor-injected resolvers;
+            // until they exist, fall back to a no-arg instantiation so
+            // the design-time surface (US1) still works in tests.
+            $hasFullDeps = class_exists(AuthorizerResolver::class)
+                && class_exists(ConditionEvaluatorResolver::class)
+                && class_exists(ActionHandlerResolver::class)
+                && class_exists(StepHandlerResolver::class)
+                && class_exists(ResolverRegistry::class)
+                && class_exists(HistoryRecorder::class)
+                && class_exists(HistoryMaterializer::class)
+                && class_exists(QuorumEvaluator::class);
+
+            if (! $hasFullDeps) {
+                return new WorkflowEngineImpl;
             }
 
             return new WorkflowEngineImpl(

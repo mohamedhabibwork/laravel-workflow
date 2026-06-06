@@ -18,4 +18,9 @@ final class InvalidStateException extends WorkflowException
     {
         return new self("Step instance must be in [{$expected}] state, currently [{$actual->value}].");
     }
+
+    public static function forWorkflow(string $expected, string $actual): self
+    {
+        return new self("Workflow must be in [{$expected}] state to activate, currently [{$actual}].");
+    }
 }
