@@ -325,6 +325,7 @@ return new class extends Migration
         Schema::create($prefix.'histories', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
+            $table->unsignedBigInteger('tenant_id')->nullable();
             $table->unsignedBigInteger('workflow_instance_id');
             $table->unsignedBigInteger('step_instance_id')->nullable();
             $table->unsignedBigInteger('from_step_id')->nullable();

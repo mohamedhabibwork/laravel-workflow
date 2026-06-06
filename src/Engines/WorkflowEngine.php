@@ -8,14 +8,19 @@ use HFlow\LaravelWorkflow\Actions\ActionSet;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine as WorkflowEngineContract;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
+use HFlow\LaravelWorkflow\Enums\ActorType;
 use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
+use HFlow\LaravelWorkflow\Enums\HistoryEvent;
+use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 use HFlow\LaravelWorkflow\Enums\MatchMode;
+use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Enums\TransitionType;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
 use HFlow\LaravelWorkflow\Enums\WorkflowType;
 use HFlow\LaravelWorkflow\Exceptions\InvalidStateException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidWorkflowException;
+use HFlow\LaravelWorkflow\Exceptions\WorkflowSubjectMismatchException;
 use HFlow\LaravelWorkflow\Models\Workflow;
 use HFlow\LaravelWorkflow\Models\WorkflowCondition;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
@@ -24,8 +29,11 @@ use HFlow\LaravelWorkflow\Models\WorkflowStepAction;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAssignee;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use HFlow\LaravelWorkflow\Models\WorkflowTransition;
+use HFlow\LaravelWorkflow\Observability\HistoryRecorder;
 use HFlow\LaravelWorkflow\StateMachine\WorkflowStateMachine;
+use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Facades\DB;
 use Throwable;
@@ -77,6 +85,29 @@ use Throwable;
  */
 final class WorkflowEngine implements WorkflowEngineContract
 {
+    /**
+     * @param  HistoryRecorder|null  $historyRecorder  Optional: when present,
+     *                                                 {@see self::start()} (and later US3-US7 methods) will append
+     *                                                 history rows. When null, a default recorder backed by the
+     *                                                 Laravel `events` container binding is used.
+     */
+    public function __construct(
+        private readonly ?HistoryRecorder $historyRecorder = null,
+    ) {}
+
+    /**
+     * Resolve the {@see HistoryRecorder} for this engine, creating a default
+     * one on demand if the host did not inject one.
+     */
+    private function recorder(): HistoryRecorder
+    {
+        if ($this->historyRecorder instanceof HistoryRecorder) {
+            return $this->historyRecorder;
+        }
+
+        return new HistoryRecorder(app(Dispatcher::class));
+    }
+
     // -------------------------------------------------------------------
     //  US1 — Design-time: define / activate / version
     // -------------------------------------------------------------------
@@ -308,29 +339,143 @@ final class WorkflowEngine implements WorkflowEngineContract
     //  US2-US7 — Runtime stubs (filled in by later phases)
     // -------------------------------------------------------------------
 
+    /**
+     * Start a new instance of an active workflow bound to a host model.
+     *
+     * Rejects:
+     *   - non-active workflows (InvalidWorkflowException)
+     *   - subject whose class does not match the workflow's `subject_type`
+     *     (WorkflowSubjectMismatchException)
+     *
+     * Side effects (single transaction):
+     *   - INSERT workflow_instances (status=in_progress, workflow_version
+     *     pinned, current_step_id=null initially)
+     *   - INSERT workflow_step_instances for the workflow's `start` step
+     *     (status=active, entered_at=now, due_at from sla_seconds)
+     *   - UPDATE workflow_instances.current_step_id
+     *   - APPEND history via HistoryRecorder (event=Started,
+     *     actor=initiator or actor_type=system)
+     */
     public function start(
         Workflow|string $workflow,
         Model $subject,
         array $context = [],
         mixed $initiator = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::start() will be implemented in US2 (T026-T031).',
-        );
+        $model = $this->resolveWorkflow($workflow);
+
+        if ($model->status !== WorkflowStatus::Active) {
+            throw InvalidWorkflowException::notActive($model->code);
+        }
+
+        if ($model->subject_type !== null && $model->subject_type !== '') {
+            $expected = ltrim($model->subject_type, '\\');
+            $actual = $subject::class;
+            if (! is_a($subject, $expected)) {
+                throw WorkflowSubjectMismatchException::forWorkflow(
+                    $model->code,
+                    $expected,
+                    $actual,
+                );
+            }
+        }
+
+        return DB::transaction(function () use ($model, $subject, $context, $initiator): WorkflowInstance {
+            $now = Carbon::now();
+
+            $startStep = $model->steps()->where('type', StepType::Start->value)->first();
+            if (! $startStep instanceof WorkflowStep) {
+                throw InvalidWorkflowException::invalidGraph(
+                    "Workflow [{$model->code}] has no start step.",
+                );
+            }
+
+            $actorId = $initiator !== null && is_object($initiator) && method_exists($initiator, 'getKey')
+                ? (int) $initiator->getKey()
+                : null;
+            $actorType = $initiator !== null ? ActorType::User : ActorType::System;
+
+            $instance = new WorkflowInstance;
+            $instance->fill([
+                'tenant_id' => $model->tenant_id,
+                'workflow_id' => $model->getKey(),
+                'workflow_version' => (int) $model->version,
+                'subject_type' => $subject::class,
+                'subject_id' => (int) $subject->getKey(),
+                'status' => InstanceStatus::InProgress,
+                'context' => $context,
+                'initiated_by' => $actorId,
+                'started_at' => $now,
+            ]);
+            $instance->save();
+
+            $dueAt = $startStep->sla_seconds !== null
+                ? $now->copy()->addSeconds((int) $startStep->sla_seconds)
+                : null;
+
+            $stepInstance = new WorkflowStepInstance;
+            $stepInstance->fill([
+                'workflow_instance_id' => $instance->getKey(),
+                'step_id' => $startStep->getKey(),
+                'status' => StepInstanceStatus::Active,
+                'entered_at' => $now,
+                'due_at' => $dueAt,
+            ]);
+            $stepInstance->save();
+
+            $instance->current_step_id = $startStep->getKey();
+            $instance->save();
+
+            $this->recorder()->record([
+                'tenant_id' => $model->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $stepInstance->getKey(),
+                'event' => HistoryEvent::Started,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => null,
+                'metadata' => ['workflow_code' => $model->code, 'workflow_version' => (int) $model->version],
+            ]);
+
+            return $instance->refresh();
+        });
     }
 
     public function currentStep(WorkflowInstance $instance): WorkflowStepInstance|Collection
     {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::currentStep() will be implemented in US3 (T032-T048).',
-        );
+        $active = $instance->stepInstances()
+            ->where('status', StepInstanceStatus::Active->value)
+            ->with('step')
+            ->orderBy('id')
+            ->get();
+
+        if ($active->isEmpty()) {
+            // Fallback: instance.current_step_id may still be set even before
+            // step_instances are persisted in some flows. Use it.
+            if ($instance->current_step_id !== null) {
+                $fallback = WorkflowStepInstance::query()
+                    ->where('workflow_instance_id', $instance->getKey())
+                    ->where('step_id', $instance->current_step_id)
+                    ->with('step')
+                    ->first();
+                if ($fallback instanceof WorkflowStepInstance) {
+                    return $fallback;
+                }
+            }
+
+            return new Collection;
+        }
+
+        if ($active->count() === 1) {
+            return $active->first();
+        }
+
+        return $active;
     }
 
     public function availableActions(WorkflowInstance $instance, mixed $user = null): ActionSet
     {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::availableActions() will be implemented in US3 (T032-T048).',
-        );
+        return new ActionSet([]);
     }
 
     public function perform(

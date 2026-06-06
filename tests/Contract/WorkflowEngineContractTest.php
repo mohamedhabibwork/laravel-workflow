@@ -34,6 +34,32 @@ it('implements every method declared in the WorkflowEngine contract', function (
     'history',
 ]);
 
+it('exposes the exact US2 signatures required by the contract', function (): void {
+    $ref = new ReflectionClass(WorkflowEngineImpl::class);
+
+    // start(Workflow|string, Model, array=[], mixed|null): WorkflowInstance
+    $m = $ref->getMethod('start');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(4)
+        ->and($params[0]->getName())->toBe('workflow')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\Workflow|string')
+        ->and($params[1]->getName())->toBe('subject')
+        ->and((string) $params[1]->getType())->toBe('Illuminate\\Database\\Eloquent\\Model')
+        ->and($params[2]->getName())->toBe('context')
+        ->and($params[2]->isDefaultValueAvailable())->toBeTrue()
+        ->and($params[3]->getName())->toBe('initiator')
+        ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance');
+
+    // currentStep(WorkflowInstance): WorkflowStepInstance|Collection
+    $m = $ref->getMethod('currentStep');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(1)
+        ->and($params[0]->getName())->toBe('instance')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance')
+        ->and((string) $m->getReturnType())
+        ->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowStepInstance|Illuminate\\Support\\Collection');
+});
+
 it('exposes the exact US1 signatures required by the contract', function (): void {
     $ref = new ReflectionClass(WorkflowEngineImpl::class);
 
