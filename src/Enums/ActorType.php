@@ -4,11 +4,10 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum WorkflowType: string
+final enum ActorType: string
 {
-    case Automation = 'automation';
-    case Approval = 'approval';
-    case Generic = 'generic';
+    case User = 'user';
+    case System = 'system';
 
     /**
      * @return array<int, string>

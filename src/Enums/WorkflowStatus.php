@@ -4,11 +4,11 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum WorkflowType: string
+final enum WorkflowStatus: string
 {
-    case Automation = 'automation';
-    case Approval = 'approval';
-    case Generic = 'generic';
+    case Draft = 'draft';
+    case Active = 'active';
+    case Archived = 'archived';
 
     /**
      * @return array<int, string>
