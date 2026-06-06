@@ -7,7 +7,7 @@ namespace HFlow\LaravelWorkflow;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
 
 /**
- * @deprecated Use the {@see \HFlow\LaravelWorkflow\Facades\LaravelWorkflow} facade
+ * @deprecated Use the {@see Facades\LaravelWorkflow} facade
  *             or type-hint {@see WorkflowEngine} in your constructor instead.
  *             This class is a backward-compatible alias and will be removed in v2.0.
  */

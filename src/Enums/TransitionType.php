@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum TransitionType: string
+enum TransitionType: string
 {
     case Forward = 'forward';
     case Skip = 'skip';

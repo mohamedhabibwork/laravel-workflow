@@ -7,6 +7,7 @@ namespace HFlow\LaravelWorkflow\Models;
 use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
+use Illuminate\Support\Carbon;
 
 /**
  * A per-step runtime record for a workflow instance.
@@ -16,9 +17,9 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  * @property int $workflow_instance_id
  * @property int $step_id
  * @property StepInstanceStatus $status
- * @property \Illuminate\Support\Carbon|null $entered_at
- * @property \Illuminate\Support\Carbon|null $completed_at
- * @property \Illuminate\Support\Carbon|null $due_at
+ * @property Carbon|null $entered_at
+ * @property Carbon|null $completed_at
+ * @property Carbon|null $due_at
  * @property int|null $acted_by
  * @property string|null $action_taken
  * @property string|null $comment
@@ -28,7 +29,7 @@ final class WorkflowStepInstance extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_step_instances';
+        return 'step_instances';
     }
 
     protected $fillable = [

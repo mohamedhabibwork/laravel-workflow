@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum ActionAvailabilityMode: string
+enum ActionAvailabilityMode: string
 {
     case General = 'general';
     case Conditional = 'conditional';

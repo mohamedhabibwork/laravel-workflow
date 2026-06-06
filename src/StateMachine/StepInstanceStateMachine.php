@@ -20,13 +20,13 @@ use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 final class StepInstanceStateMachine
 {
     private const TRANSITIONS = [
-        'pending'   => ['active'],
-        'active'    => ['completed', 'skipped', 'returned', 'rejected', 'failed'],
+        'pending' => ['active'],
+        'active' => ['completed', 'skipped', 'returned', 'rejected', 'failed'],
         'completed' => [],
-        'skipped'   => [],
-        'returned'  => [],
-        'rejected'  => [],
-        'failed'    => ['active'],
+        'skipped' => [],
+        'returned' => [],
+        'rejected' => [],
+        'failed' => ['active'],
     ];
 
     public static function canTransition(StepInstanceStatus $from, StepInstanceStatus $to): bool

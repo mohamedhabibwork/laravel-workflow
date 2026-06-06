@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum StepInstanceStatus: string
+enum StepInstanceStatus: string
 {
     case Pending = 'pending';
     case Active = 'active';

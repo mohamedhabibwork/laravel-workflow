@@ -11,6 +11,7 @@ use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
 use HFlow\LaravelWorkflow\Enums\WorkflowType;
+use HFlow\LaravelWorkflow\Facades\LaravelWorkflow;
 use HFlow\LaravelWorkflow\LaravelWorkflowServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Database\Schema\Blueprint;
@@ -108,7 +109,7 @@ class TestCase extends Orchestra
     protected function getPackageAliases($app): array
     {
         return [
-            'LaravelWorkflow' => \HFlow\LaravelWorkflow\Facades\LaravelWorkflow::class,
+            'LaravelWorkflow' => LaravelWorkflow::class,
         ];
     }
 

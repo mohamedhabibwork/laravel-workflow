@@ -20,7 +20,7 @@ use HFlow\LaravelWorkflow\Models\WorkflowStep;
  *    every available-actions query for cache freshness)
  *  - Resolver MUST NOT throw; return an empty iterable on any internal error
  *
- * @return iterable<mixed>  The set of host user instances eligible to act
+ * @return iterable<mixed> The set of host user instances eligible to act
  *
  * @see /specs/002-laravel-workflow-engine/contracts/host-contracts.md#5-customresolver
  */

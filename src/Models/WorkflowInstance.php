@@ -9,6 +9,7 @@ use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
 use Illuminate\Database\Eloquent\Relations\HasMany;
 use Illuminate\Database\Eloquent\Relations\MorphTo;
+use Illuminate\Support\Carbon;
 
 /**
  * A running workflow instance bound to a host model.
@@ -24,14 +25,14 @@ use Illuminate\Database\Eloquent\Relations\MorphTo;
  * @property InstanceStatus $status
  * @property array<string, mixed>|null $context
  * @property int|null $initiated_by
- * @property \Illuminate\Support\Carbon|null $started_at
- * @property \Illuminate\Support\Carbon|null $completed_at
+ * @property Carbon|null $started_at
+ * @property Carbon|null $completed_at
  */
 final class WorkflowInstance extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_instances';
+        return 'instances';
     }
 
     protected $fillable = [

@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum WorkflowStatus: string
+enum WorkflowStatus: string
 {
     case Draft = 'draft';
     case Active = 'active';

@@ -6,6 +6,7 @@ namespace HFlow\LaravelWorkflow\Models;
 
 use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * A runtime task assignment (who is on the hook for this step).
@@ -15,14 +16,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property int $step_instance_id
  * @property int $assignee_id
  * @property AssignmentStatus $status
- * @property \Illuminate\Support\Carbon|null $assigned_at
- * @property \Illuminate\Support\Carbon|null $acted_at
+ * @property Carbon|null $assigned_at
+ * @property Carbon|null $acted_at
  */
 final class WorkflowAssignment extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_assignments';
+        return 'assignments';
     }
 
     protected $fillable = [

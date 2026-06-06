@@ -4,8 +4,9 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\StateMachine;
 
+use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
-use InvalidArgumentException;
+use Illuminate\Support\Collection;
 
 /**
  * State machine for `workflows.status`.
@@ -17,8 +18,8 @@ use InvalidArgumentException;
 final class WorkflowStateMachine
 {
     private const TRANSITIONS = [
-        'draft'    => ['active', 'archived'],
-        'active'   => ['archived'],
+        'draft' => ['active', 'archived'],
+        'active' => ['archived'],
         'archived' => ['active'],
     ];
 
@@ -53,12 +54,12 @@ final class WorkflowStateMachine
     /**
      * Activation guard: exactly one start step, at least one end step.
      *
-     * @param  \Illuminate\Support\Collection<int, mixed>  $steps
+     * @param  Collection<int, mixed>  $steps
      */
-    public static function canActivate(\Illuminate\Support\Collection $steps): bool
+    public static function canActivate(Collection $steps): bool
     {
-        $startCount = $steps->where('type', \HFlow\LaravelWorkflow\Enums\StepType::Start->value)->count();
-        $endCount = $steps->where('type', \HFlow\LaravelWorkflow\Enums\StepType::End->value)->count();
+        $startCount = $steps->where('type', StepType::Start->value)->count();
+        $endCount = $steps->where('type', StepType::End->value)->count();
 
         return $startCount === 1 && $endCount >= 1;
     }

@@ -5,7 +5,6 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Exceptions;
 
 use RuntimeException;
-use Throwable;
 
 /**
  * Base class for every exception thrown by the workflow engine.

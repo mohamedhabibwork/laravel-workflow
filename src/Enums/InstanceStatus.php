@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum InstanceStatus: string
+enum InstanceStatus: string
 {
     case Pending = 'pending';
     case InProgress = 'in_progress';

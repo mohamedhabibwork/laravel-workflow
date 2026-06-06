@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum ActionType: string
+enum ActionType: string
 {
     case Submit = 'submit';
     case Approve = 'approve';

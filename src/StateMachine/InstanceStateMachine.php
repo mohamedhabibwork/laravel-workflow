@@ -20,13 +20,13 @@ use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 final class InstanceStateMachine
 {
     private const TRANSITIONS = [
-        'pending'     => ['in_progress', 'cancelled'],
+        'pending' => ['in_progress', 'cancelled'],
         'in_progress' => ['on_hold', 'completed', 'rejected', 'failed', 'cancelled'],
-        'on_hold'     => ['in_progress', 'cancelled'],
-        'completed'   => [],
-        'cancelled'   => [],
-        'rejected'    => [],
-        'failed'      => ['in_progress'],
+        'on_hold' => ['in_progress', 'cancelled'],
+        'completed' => [],
+        'cancelled' => [],
+        'rejected' => [],
+        'failed' => ['in_progress'],
     ];
 
     public static function canTransition(InstanceStatus $from, InstanceStatus $to): bool

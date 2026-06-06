@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum HistoryEvent: string
+enum HistoryEvent: string
 {
     case Started = 'started';
     case StepEntered = 'step_entered';

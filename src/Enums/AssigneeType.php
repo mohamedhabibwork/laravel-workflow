@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum AssigneeType: string
+enum AssigneeType: string
 {
     case Role = 'role';
     case Permission = 'permission';

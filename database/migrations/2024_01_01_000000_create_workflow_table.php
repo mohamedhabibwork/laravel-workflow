@@ -30,10 +30,11 @@ return new class extends Migration
         $prefix = (string) config('workflow.table_prefix', 'workflow_');
 
         // --- 1. workflow_steps (must exist before workflows.start_step_id FK)
-        Schema::create($prefix.'workflow_steps', function (Blueprint $table): void {
+        Schema::create($prefix.'steps', function (Blueprint $table): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('tenant_id')->nullable();
+            $table->unsignedBigInteger('workflow_id')->nullable();
             $table->string('name');
             $table->string('code');
             $table->text('description')->nullable();
@@ -84,7 +85,7 @@ return new class extends Migration
             $table->timestampTz('updated_at')->nullable();
 
             $table->foreign('start_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->unique(['tenant_id', 'code', 'deleted_at'], 'workflows_tenant_code_deleted_uq');
@@ -93,7 +94,7 @@ return new class extends Migration
         });
 
         // --- 3. workflow_step_assignees
-        Schema::create($prefix.'workflow_step_assignees', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'step_assignees', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('step_id');
@@ -110,14 +111,14 @@ return new class extends Migration
             $table->timestampTz('updated_at')->nullable();
 
             $table->foreign('step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('cascade');
 
             $table->index(['step_id', 'sort_order']);
         });
 
         // --- 4. workflow_conditions (no FK to workflow yet; workflow is created above)
-        Schema::create($prefix.'workflow_conditions', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'conditions', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('workflow_id')->nullable();
@@ -143,7 +144,7 @@ return new class extends Migration
         });
 
         // --- 5. workflow_step_actions
-        Schema::create($prefix.'workflow_step_actions', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'step_actions', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('step_id');
@@ -167,15 +168,15 @@ return new class extends Migration
             $table->timestampTz('updated_at')->nullable();
 
             $table->foreign('step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('cascade');
 
             $table->foreign('guard_condition_id')
-                ->references('id')->on($prefix.'workflow_conditions')
+                ->references('id')->on($prefix.'conditions')
                 ->onDelete('set null');
 
             $table->foreign('target_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->index(['step_id', 'code']);
@@ -183,7 +184,7 @@ return new class extends Migration
         });
 
         // --- 6. workflow_transitions
-        Schema::create($prefix.'workflow_transitions', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'transitions', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('workflow_id');
@@ -206,19 +207,19 @@ return new class extends Migration
                 ->onDelete('cascade');
 
             $table->foreign('from_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->foreign('to_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->foreign('action_id')
-                ->references('id')->on($prefix.'workflow_step_actions')
+                ->references('id')->on($prefix.'step_actions')
                 ->onDelete('set null');
 
             $table->foreign('condition_id')
-                ->references('id')->on($prefix.'workflow_conditions')
+                ->references('id')->on($prefix.'conditions')
                 ->onDelete('set null');
 
             $table->index(['workflow_id', 'from_step_id']);
@@ -226,7 +227,7 @@ return new class extends Migration
         });
 
         // --- 7. workflow_instances
-        Schema::create($prefix.'workflow_instances', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'instances', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('tenant_id')->nullable();
@@ -253,7 +254,7 @@ return new class extends Migration
                 ->onDelete('restrict');
 
             $table->foreign('current_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->index(['subject_type', 'subject_id']);
@@ -263,7 +264,7 @@ return new class extends Migration
         });
 
         // --- 8. workflow_step_instances
-        Schema::create($prefix.'workflow_step_instances', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'step_instances', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('workflow_instance_id');
@@ -285,18 +286,18 @@ return new class extends Migration
             $table->timestampTz('updated_at')->nullable();
 
             $table->foreign('workflow_instance_id')
-                ->references('id')->on($prefix.'workflow_instances')
+                ->references('id')->on($prefix.'instances')
                 ->onDelete('cascade');
 
             $table->foreign('step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('restrict');
 
             $table->index(['workflow_instance_id', 'status']);
         });
 
         // --- 9. workflow_assignments
-        Schema::create($prefix.'workflow_assignments', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'assignments', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('step_instance_id');
@@ -313,7 +314,7 @@ return new class extends Migration
             $table->timestampTz('updated_at')->nullable();
 
             $table->foreign('step_instance_id')
-                ->references('id')->on($prefix.'workflow_step_instances')
+                ->references('id')->on($prefix.'step_instances')
                 ->onDelete('cascade');
 
             $table->index(['assignee_id', 'status']);
@@ -321,7 +322,7 @@ return new class extends Migration
         });
 
         // --- 10. workflow_histories (APPEND-ONLY — no updated_at, no soft delete)
-        Schema::create($prefix.'workflow_histories', function (Blueprint $table) use ($prefix): void {
+        Schema::create($prefix.'histories', function (Blueprint $table) use ($prefix): void {
             $table->bigIncrements('id');
             $table->uuid('uuid')->unique();
             $table->unsignedBigInteger('workflow_instance_id');
@@ -338,19 +339,19 @@ return new class extends Migration
             $table->timestampTz('created_at')->useCurrent();
 
             $table->foreign('workflow_instance_id')
-                ->references('id')->on($prefix.'workflow_instances')
+                ->references('id')->on($prefix.'instances')
                 ->onDelete('cascade');
 
             $table->foreign('step_instance_id')
-                ->references('id')->on($prefix.'workflow_step_instances')
+                ->references('id')->on($prefix.'step_instances')
                 ->onDelete('set null');
 
             $table->foreign('from_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->foreign('to_step_id')
-                ->references('id')->on($prefix.'workflow_steps')
+                ->references('id')->on($prefix.'steps')
                 ->onDelete('set null');
 
             $table->index(['workflow_instance_id', 'performed_at']);
@@ -364,15 +365,15 @@ return new class extends Migration
         $prefix = (string) config('workflow.table_prefix', 'workflow_');
 
         // Drop in reverse dependency order
-        Schema::dropIfExists($prefix.'workflow_histories');
-        Schema::dropIfExists($prefix.'workflow_assignments');
-        Schema::dropIfExists($prefix.'workflow_step_instances');
-        Schema::dropIfExists($prefix.'workflow_instances');
-        Schema::dropIfExists($prefix.'workflow_transitions');
-        Schema::dropIfExists($prefix.'workflow_step_actions');
-        Schema::dropIfExists($prefix.'workflow_conditions');
-        Schema::dropIfExists($prefix.'workflow_step_assignees');
+        Schema::dropIfExists($prefix.'histories');
+        Schema::dropIfExists($prefix.'assignments');
+        Schema::dropIfExists($prefix.'step_instances');
+        Schema::dropIfExists($prefix.'instances');
+        Schema::dropIfExists($prefix.'transitions');
+        Schema::dropIfExists($prefix.'step_actions');
+        Schema::dropIfExists($prefix.'conditions');
+        Schema::dropIfExists($prefix.'step_assignees');
         Schema::dropIfExists($prefix.'workflows');
-        Schema::dropIfExists($prefix.'workflow_steps');
+        Schema::dropIfExists($prefix.'steps');
     }
 };

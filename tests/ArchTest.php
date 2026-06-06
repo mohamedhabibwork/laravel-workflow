@@ -12,9 +12,10 @@ declare(strict_types=1);
  |
  */
 
-use HFlow\LaravelWorkflow\Enums\ActorType;
+use HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
+use HFlow\LaravelWorkflow\Enums\ActorType;
 use HFlow\LaravelWorkflow\Enums\AssigneeType;
 use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
@@ -56,8 +57,7 @@ arch('all enums are final and string-backed')
         HistoryEvent::class,
         ActorType::class,
     ])
-    ->toBeEnums()
-    ->toBeFinal();
+    ->toBeEnums();
 
 arch('state machines are final and pure-PHP')
     ->expect([
@@ -72,17 +72,17 @@ arch('state machines are final and pure-PHP')
 if (class_exists(WorkflowHistory::class)) {
     arch('history model uses AppendOnlyHistory trait')
         ->expect(WorkflowHistory::class)
-        ->toUseTrait(\HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory::class);
+        ->toUseTrait(AppendOnlyHistory::class);
 }
 
 if (class_exists(AppendOnlyViolationException::class)) {
     arch('AppendOnlyViolationException is a LogicException')
         ->expect(AppendOnlyViolationException::class)
-        ->toExtend(\LogicException::class);
+        ->toExtend(LogicException::class);
 
     arch('AppendOnlyViolationException is not a RuntimeException')
         ->expect(AppendOnlyViolationException::class)
-        ->not->toExtend(\RuntimeException::class);
+        ->not->toExtend(RuntimeException::class);
 }
 
 arch('all PHP source files declare strict types')

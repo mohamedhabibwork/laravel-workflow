@@ -4,7 +4,11 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Models;
 
+use HFlow\LaravelWorkflow\Concerns\HasUuid;
+use HFlow\LaravelWorkflow\Concerns\HasWorkflowTimestamps;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
+use Illuminate\Database\Eloquent\SoftDeletes;
 
 /**
  * Base class for all workflow Eloquent models.
@@ -25,9 +29,10 @@ use Illuminate\Database\Eloquent\Model;
  */
 abstract class WorkflowModel extends Model
 {
-    use \HFlow\LaravelWorkflow\Concerns\HasUuid;
-    use \Illuminate\Database\Eloquent\SoftDeletes;
-    use \HFlow\LaravelWorkflow\Concerns\HasWorkflowTimestamps;
+    use HasFactory;
+    use HasUuid;
+    use HasWorkflowTimestamps;
+    use SoftDeletes;
 
     /**
      * The column used to indicate soft deletion.

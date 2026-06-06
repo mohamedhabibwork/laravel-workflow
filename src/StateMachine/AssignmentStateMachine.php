@@ -17,10 +17,10 @@ use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 final class AssignmentStateMachine
 {
     private const TRANSITIONS = [
-        'pending'    => ['acted', 'reassigned', 'expired'],
-        'acted'      => [],
+        'pending' => ['acted', 'reassigned', 'expired'],
+        'acted' => [],
         'reassigned' => [],
-        'expired'    => [],
+        'expired' => [],
     ];
 
     public static function canTransition(AssignmentStatus $from, AssignmentStatus $to): bool

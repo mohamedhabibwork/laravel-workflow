@@ -2,7 +2,6 @@
 
 declare(strict_types=1);
 
-use Illuminate\Support\Facades\Artisan;
 use Illuminate\Support\Facades\Schema;
 
 it('loads the combined workflow migration successfully', function (): void {
@@ -11,15 +10,15 @@ it('loads the combined workflow migration successfully', function (): void {
     $prefix = (string) config('workflow.table_prefix', 'workflow_');
     $tables = [
         'workflows',
-        'workflow_steps',
-        'workflow_step_assignees',
-        'workflow_step_actions',
-        'workflow_conditions',
-        'workflow_transitions',
-        'workflow_instances',
-        'workflow_step_instances',
-        'workflow_assignments',
-        'workflow_histories',
+        'steps',
+        'step_assignees',
+        'step_actions',
+        'conditions',
+        'transitions',
+        'instances',
+        'step_instances',
+        'assignments',
+        'histories',
     ];
 
     foreach ($tables as $table) {
@@ -31,7 +30,7 @@ it('has the expected columns on workflow_instances', function (): void {
     $this->loadWorkflowMigrations();
 
     $prefix = (string) config('workflow.table_prefix', 'workflow_');
-    $table = $prefix.'workflow_instances';
+    $table = $prefix.'instances';
 
     expect(Schema::hasColumn($table, 'id'))->toBeTrue();
     expect(Schema::hasColumn($table, 'uuid'))->toBeTrue();
@@ -56,7 +55,7 @@ it('workflow_histories is append-only (no updated_at, no soft delete)', function
     $this->loadWorkflowMigrations();
 
     $prefix = (string) config('workflow.table_prefix', 'workflow_');
-    $table = $prefix.'workflow_histories';
+    $table = $prefix.'histories';
 
     expect(Schema::hasColumn($table, 'id'))->toBeTrue();
     expect(Schema::hasColumn($table, 'uuid'))->toBeTrue();
@@ -76,6 +75,6 @@ it('honors a custom table prefix from config', function (): void {
     config()->set('workflow.table_prefix', 'custom_');
     $this->loadWorkflowMigrations();
 
-    expect(Schema::hasTable('custom_workflow_instances'))->toBeTrue();
-    expect(Schema::hasTable('workflow_instances'))->toBeFalse();
+    expect(Schema::hasTable('custom_instances'))->toBeTrue();
+    expect(Schema::hasTable('instances'))->toBeFalse();
 });

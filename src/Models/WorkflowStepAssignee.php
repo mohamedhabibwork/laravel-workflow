@@ -22,7 +22,7 @@ final class WorkflowStepAssignee extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_step_assignees';
+        return 'step_assignees';
     }
 
     protected $fillable = [

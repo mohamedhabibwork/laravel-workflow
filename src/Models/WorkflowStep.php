@@ -35,7 +35,7 @@ final class WorkflowStep extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_steps';
+        return 'steps';
     }
 
     protected $fillable = [

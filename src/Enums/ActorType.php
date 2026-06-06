@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum ActorType: string
+enum ActorType: string
 {
     case User = 'user';
     case System = 'system';

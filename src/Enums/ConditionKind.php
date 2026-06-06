@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum ConditionKind: string
+enum ConditionKind: string
 {
     case Expression = 'expression';
     case Custom = 'custom';

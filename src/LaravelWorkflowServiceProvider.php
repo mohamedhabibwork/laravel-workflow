@@ -11,40 +11,40 @@ use HFlow\LaravelWorkflow\Contracts\CustomResolver;
 use HFlow\LaravelWorkflow\Contracts\CustomStepHandler;
 use HFlow\LaravelWorkflow\Contracts\TenantScopeProvider;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
+use HFlow\LaravelWorkflow\Engines\Actions\ActionHandlerResolver;
+use HFlow\LaravelWorkflow\Engines\Actions\DefaultActionHandler;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerResolver;
+use HFlow\LaravelWorkflow\Engines\Authorizers\DefaultAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Automation\AutomationRunner;
+use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluatorResolver;
+use HFlow\LaravelWorkflow\Engines\Conditions\DefaultConditionEvaluator;
+use HFlow\LaravelWorkflow\Engines\History\HistoryMaterializer;
+use HFlow\LaravelWorkflow\Engines\History\QuorumEvaluator;
+use HFlow\LaravelWorkflow\Engines\Resolvers\DefaultResolver;
+use HFlow\LaravelWorkflow\Engines\Resolvers\ResolverRegistry;
+use HFlow\LaravelWorkflow\Engines\Steps\DefaultStepHandler;
+use HFlow\LaravelWorkflow\Engines\Steps\StepHandlerResolver;
 use HFlow\LaravelWorkflow\Engines\WorkflowEngine as WorkflowEngineImpl;
-use HFlow\LaravelWorkflow\Events\InstanceStarted;
-use HFlow\LaravelWorkflow\Events\InstanceCompleted;
+use HFlow\LaravelWorkflow\Events\ActionPerformed;
+use HFlow\LaravelWorkflow\Events\AssignmentCompleted;
+use HFlow\LaravelWorkflow\Events\AssignmentCreated;
+use HFlow\LaravelWorkflow\Events\AssignmentExpired;
 use HFlow\LaravelWorkflow\Events\InstanceCancelled;
+use HFlow\LaravelWorkflow\Events\InstanceCompleted;
 use HFlow\LaravelWorkflow\Events\InstanceFailed;
 use HFlow\LaravelWorkflow\Events\InstanceHeld;
 use HFlow\LaravelWorkflow\Events\InstanceResumed;
-use HFlow\LaravelWorkflow\Events\StepStarted;
+use HFlow\LaravelWorkflow\Events\InstanceStarted;
 use HFlow\LaravelWorkflow\Events\StepCompleted;
-use HFlow\LaravelWorkflow\Events\StepSkipped;
 use HFlow\LaravelWorkflow\Events\StepReturned;
-use HFlow\LaravelWorkflow\Events\ActionPerformed;
-use HFlow\LaravelWorkflow\Events\AssignmentCreated;
-use HFlow\LaravelWorkflow\Events\AssignmentCompleted;
-use HFlow\LaravelWorkflow\Events\AssignmentExpired;
+use HFlow\LaravelWorkflow\Events\StepSkipped;
+use HFlow\LaravelWorkflow\Events\StepStarted;
 use HFlow\LaravelWorkflow\Listeners\RecordHistory;
-use HFlow\LaravelWorkflow\Observability\HistoryRecorder;
 use HFlow\LaravelWorkflow\Observability\ActivityFeed;
-use HFlow\LaravelWorkflow\Engines\Authorizers\DefaultAuthorizer;
-use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerResolver;
-use HFlow\LaravelWorkflow\Engines\Conditions\DefaultConditionEvaluator;
-use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluatorResolver;
-use HFlow\LaravelWorkflow\Engines\Actions\DefaultActionHandler;
-use HFlow\LaravelWorkflow\Engines\Actions\ActionHandlerResolver;
-use HFlow\LaravelWorkflow\Engines\Steps\DefaultStepHandler;
-use HFlow\LaravelWorkflow\Engines\Steps\StepHandlerResolver;
-use HFlow\LaravelWorkflow\Engines\Resolvers\DefaultResolver;
-use HFlow\LaravelWorkflow\Engines\Resolvers\ResolverRegistry;
-use HFlow\LaravelWorkflow\Engines\Automation\AutomationRunner;
-use HFlow\LaravelWorkflow\Engines\History\HistoryMaterializer;
-use HFlow\LaravelWorkflow\Engines\History\QuorumEvaluator;
+use HFlow\LaravelWorkflow\Observability\HistoryRecorder;
 use Illuminate\Contracts\Events\Dispatcher;
+use Illuminate\Database\Eloquent\Factories\Factory;
 use Illuminate\Support\Facades\Event;
-use Illuminate\Support\ServiceProvider;
 use InvalidArgumentException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
@@ -82,7 +82,31 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
 
     public function packageBooted(): void
     {
+        $this->registerFactoryResolver();
         $this->registerHistoryListeners();
+    }
+
+    /**
+     * Register the Eloquent factory namespace resolver so workflow
+     * models (HFlow\LaravelWorkflow\Models\*) can find their factories
+     * in the package's published Database\Factories\ directory.
+     *
+     * Compatible with Laravel 10/11 (static Factory::guessFactoryNamesUsing)
+     * and Laravel 12 (same static API).
+     */
+    protected function registerFactoryResolver(): void
+    {
+        if (! method_exists(Factory::class, 'guessFactoryNamesUsing')) {
+            return;
+        }
+
+        Factory::guessFactoryNamesUsing(function (string $modelName): string {
+            $basename = class_basename($modelName);
+            $root = trim((string) config('workflow.factory_namespace', 'Database\\Factories'), '\\');
+            $root = str_replace('/', '\\', $root);
+
+            return $root.'\\'.$basename.'Factory';
+        });
     }
 
     /**
@@ -180,13 +204,13 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         });
 
         // Backward-compat alias: \HFlow\LaravelWorkflow\LaravelWorkflow resolves to the engine
-        $this->app->singleton(\HFlow\LaravelWorkflow\LaravelWorkflow::class, function ($app): ?\HFlow\LaravelWorkflow\LaravelWorkflow {
+        $this->app->singleton(LaravelWorkflow::class, function ($app): ?LaravelWorkflow {
             $engine = $app->make(WorkflowEngine::class);
             if ($engine === null) {
                 return null;
             }
 
-            return new \HFlow\LaravelWorkflow\LaravelWorkflow($engine);
+            return new LaravelWorkflow($engine);
         });
     }
 

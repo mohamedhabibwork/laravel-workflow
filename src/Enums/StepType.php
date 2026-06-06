@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum StepType: string
+enum StepType: string
 {
     case Start = 'start';
     case Task = 'task';

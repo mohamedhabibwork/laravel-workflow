@@ -5,7 +5,9 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Contracts;
 
 use HFlow\LaravelWorkflow\Actions\ActionSet;
+use HFlow\LaravelWorkflow\Facades\LaravelWorkflow;
 use HFlow\LaravelWorkflow\Models\Workflow;
+use HFlow\LaravelWorkflow\Models\WorkflowHistory;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Database\Eloquent\Model;
@@ -17,7 +19,7 @@ use Illuminate\Support\Collection;
  * This is the ONLY class a host MUST know to use the engine. All other
  * classes in the package are implementation details. The interface is
  * bound in the service container; hosts may type-hint it in their
- * constructors, or use the {@see \HFlow\LaravelWorkflow\Facades\LaravelWorkflow}
+ * constructors, or use the {@see LaravelWorkflow}
  * facade.
  *
  * @see \HFlow\LaravelWorkflow\Engines\WorkflowEngine  Default implementation
@@ -170,7 +172,7 @@ interface WorkflowEngine
      *
      * @param  int|null  $limit  If set, return at most this many events (most recent first)
      * @param  string|null  $event  If set, filter to a single event type
-     * @return Collection<int, \HFlow\LaravelWorkflow\Models\WorkflowHistory>
+     * @return Collection<int, WorkflowHistory>
      */
     public function history(
         WorkflowInstance $instance,

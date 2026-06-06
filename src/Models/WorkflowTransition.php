@@ -24,7 +24,7 @@ final class WorkflowTransition extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_transitions';
+        return 'transitions';
     }
 
     protected $fillable = [

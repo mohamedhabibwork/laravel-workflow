@@ -5,10 +5,13 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Models;
 
 use HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory;
+use HFlow\LaravelWorkflow\Concerns\HasUuid;
 use HFlow\LaravelWorkflow\Enums\ActorType;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
+use Illuminate\Database\Eloquent\Factories\HasFactory;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
+use Illuminate\Support\Carbon;
 
 /**
  * Append-only audit log row. ONE direct INSERT per event; no updates.
@@ -34,13 +37,14 @@ use Illuminate\Database\Eloquent\Relations\BelongsTo;
  * @property ActorType $actor_type
  * @property string|null $comment
  * @property array<string, mixed>|null $metadata
- * @property \Illuminate\Support\Carbon $performed_at
- * @property \Illuminate\Support\Carbon $created_at
+ * @property Carbon $performed_at
+ * @property Carbon $created_at
  */
 final class WorkflowHistory extends Model
 {
     use AppendOnlyHistory;
-    use \HFlow\LaravelWorkflow\Concerns\HasUuid;
+    use HasFactory;
+    use HasUuid;
 
     /**
      * Disable Eloquent's automatic timestamp management.
@@ -51,14 +55,14 @@ final class WorkflowHistory extends Model
 
     protected function tableName(): string
     {
-        return 'workflow_histories';
+        return 'histories';
     }
 
     public function getTable(): string
     {
         $prefix = (string) config('workflow.table_prefix', 'workflow_');
 
-        return $prefix.'workflow_histories';
+        return $prefix.$this->tableName();
     }
 
     protected $fillable = [
@@ -71,7 +75,7 @@ final class WorkflowHistory extends Model
     /**
      * @return array<string, string>
      */
-    protected function casts(): array
+    public function casts(): array
     {
         return [
             'event' => HistoryEvent::class,

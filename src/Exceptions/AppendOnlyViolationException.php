@@ -10,6 +10,4 @@ use LogicException;
  * Thrown when code attempts to update or delete an append-only record.
  * LogicException (programmer error) — not a runtime error.
  */
-final class AppendOnlyViolationException extends LogicException
-{
-}
+final class AppendOnlyViolationException extends LogicException {}

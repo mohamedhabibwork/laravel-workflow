@@ -24,7 +24,7 @@ final class WorkflowCondition extends WorkflowModel
 {
     protected function tableName(): string
     {
-        return 'workflow_conditions';
+        return 'conditions';
     }
 
     protected $fillable = [

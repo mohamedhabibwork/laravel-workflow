@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum MatchMode: string
+enum MatchMode: string
 {
     case Any = 'any';
     case All = 'all';

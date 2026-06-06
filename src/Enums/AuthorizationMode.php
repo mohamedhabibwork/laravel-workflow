@@ -4,7 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Enums;
 
-final enum AuthorizationMode: string
+enum AuthorizationMode: string
 {
     case Public = 'public';
     case Roles = 'roles';

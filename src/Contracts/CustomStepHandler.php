@@ -24,7 +24,7 @@ use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
  *    engine->advance())
  *  - Handler runs SYNCHRONOUSLY
  *
- * @return array<string, mixed>  Step-local data to merge into $stepInstance->data
+ * @return array<string, mixed> Step-local data to merge into $stepInstance->data
  *
  * @see /specs/002-laravel-workflow-engine/contracts/host-contracts.md#4-customstephandler
  */
