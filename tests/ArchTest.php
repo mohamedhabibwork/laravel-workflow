@@ -70,10 +70,9 @@ arch('state machines are final and pure-PHP')
     ->toBeFinal();
 
 if (class_exists(WorkflowHistory::class)) {
-    arch('history model is append-only and cannot be updated or deleted')
+    arch('history model uses AppendOnlyHistory trait')
         ->expect(WorkflowHistory::class)
-        ->toUse(AppendOnlyViolationException::class)
-        ->ignoringMethods(['__construct', 'bootAppendOnlyHistory']);
+        ->toUseTrait(\HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory::class);
 }
 
 if (class_exists(AppendOnlyViolationException::class)) {
@@ -91,8 +90,9 @@ arch('all PHP source files declare strict types')
     ->toUseStrictTypes();
 
 if (is_dir(__DIR__.'/../src/Models')) {
-    arch('all Eloquent models are final')
+    arch('all Eloquent models (except abstract base) are final')
         ->expect('HFlow\\LaravelWorkflow\\Models')
         ->toBeClasses()
-        ->toBeFinal();
+        ->toBeFinal()
+        ->ignoring(['HFlow\\LaravelWorkflow\\Models\\WorkflowModel']);
 }
