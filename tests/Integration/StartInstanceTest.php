@@ -196,7 +196,7 @@ it('(e) appends a Started history entry with the initiator as the actor', functi
 
     $history = WorkflowHistory::query()
         ->where('workflow_instance_id', $instance->id)
-        ->get();
+        ->cursor();
 
     expect($history)->toHaveCount(1)
         ->and($history->first()->event)->toBe(HistoryEvent::Started)

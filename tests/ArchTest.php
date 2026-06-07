@@ -23,6 +23,7 @@ use HFlow\LaravelWorkflow\Enums\ConditionKind;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
 use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 use HFlow\LaravelWorkflow\Enums\MatchMode;
+use HFlow\LaravelWorkflow\Enums\Operator;
 use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Enums\TransitionType;
@@ -56,6 +57,7 @@ arch('all enums are final and string-backed')
         AssignmentStatus::class,
         HistoryEvent::class,
         ActorType::class,
+        Operator::class,
     ])
     ->toBeEnums();
 

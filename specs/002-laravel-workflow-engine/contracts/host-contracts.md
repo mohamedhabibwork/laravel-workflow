@@ -224,7 +224,7 @@ final class ResolveByOrderRegion implements CustomResolver
         return User::query()
             ->where('region', $subject->region)
             ->where('role', 'reviewer')
-            ->get();
+            ->cursor();
     }
 }
 ```

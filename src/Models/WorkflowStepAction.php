@@ -36,7 +36,7 @@ final class WorkflowStepAction extends WorkflowModel
     protected $fillable = [
         'uuid', 'step_id', 'name', 'code', 'label', 'type', 'availability_mode',
         'guard_condition_id', 'guard_class', 'target_step_id',
-        'requires_comment', 'handler', 'sort_order',
+        'requires_comment', 'handler', 'sort_order', 'config',
         'is_deleted', 'deleted_at', 'created_by', 'updated_by', 'deleted_by',
     ];
 
@@ -50,6 +50,7 @@ final class WorkflowStepAction extends WorkflowModel
             'availability_mode' => ActionAvailabilityMode::class,
             'requires_comment' => 'boolean',
             'sort_order' => 'integer',
+            'config' => 'array',
         ]);
     }
 

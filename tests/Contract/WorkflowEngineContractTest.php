@@ -60,6 +60,34 @@ it('exposes the exact US2 signatures required by the contract', function (): voi
         ->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowStepInstance|Illuminate\\Support\\Collection');
 });
 
+it('exposes the exact US3 signatures required by the contract', function (): void {
+    $ref = new ReflectionClass(WorkflowEngineImpl::class);
+
+    // availableActions(WorkflowInstance, mixed = null): ActionSet
+    $m = $ref->getMethod('availableActions');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(2)
+        ->and($params[0]->getName())->toBe('instance')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance')
+        ->and($params[1]->getName())->toBe('user')
+        ->and($params[1]->isDefaultValueAvailable())->toBeTrue()
+        ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Actions\\ActionSet');
+
+    // perform(WorkflowInstance, string, mixed = null, ?array = null): WorkflowInstance
+    $m = $ref->getMethod('perform');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(4)
+        ->and($params[0]->getName())->toBe('instance')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance')
+        ->and($params[1]->getName())->toBe('actionCode')
+        ->and((string) $params[1]->getType())->toBe('string')
+        ->and($params[2]->getName())->toBe('user')
+        ->and($params[2]->isDefaultValueAvailable())->toBeTrue()
+        ->and($params[3]->getName())->toBe('payload')
+        ->and($params[3]->isDefaultValueAvailable())->toBeTrue()
+        ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance');
+});
+
 it('exposes the exact US1 signatures required by the contract', function (): void {
     $ref = new ReflectionClass(WorkflowEngineImpl::class);
 

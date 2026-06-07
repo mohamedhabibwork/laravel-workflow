@@ -159,6 +159,7 @@ return new class extends Migration
             $table->boolean('requires_comment')->default(false);
             $table->string('handler')->nullable();
             $table->unsignedInteger('sort_order')->default(0);
+            $table->json('config')->nullable();
             $table->boolean('is_deleted')->default(false);
             $table->timestampTz('deleted_at')->nullable();
             $table->unsignedBigInteger('created_by')->nullable();

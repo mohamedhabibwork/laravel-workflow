@@ -4,11 +4,15 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines;
 
+use HFlow\LaravelWorkflow\Actions\Action;
 use HFlow\LaravelWorkflow\Actions\ActionSet;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine as WorkflowEngineContract;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
+use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
 use HFlow\LaravelWorkflow\Enums\ActorType;
+use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
 use HFlow\LaravelWorkflow\Enums\InstanceStatus;
@@ -18,10 +22,15 @@ use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Enums\TransitionType;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
 use HFlow\LaravelWorkflow\Enums\WorkflowType;
+use HFlow\LaravelWorkflow\Exceptions\ActionNotAvailableException;
+use HFlow\LaravelWorkflow\Exceptions\CommentRequiredException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidStateException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidWorkflowException;
+use HFlow\LaravelWorkflow\Exceptions\NotEligibleException;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowSubjectMismatchException;
+use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
 use HFlow\LaravelWorkflow\Models\Workflow;
+use HFlow\LaravelWorkflow\Models\WorkflowAssignment;
 use HFlow\LaravelWorkflow\Models\WorkflowCondition;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
 use HFlow\LaravelWorkflow\Models\WorkflowStep;
@@ -47,10 +56,17 @@ use Throwable;
  *   - {@see self::activate()}     Validate + flip a draft to the active version
  *   - {@see self::versions()}     List all versions of a workflow
  *
- * Runtime methods (start, currentStep, availableActions, perform, skip, return,
- * hold, resume, cancel, retry, history) are stubbed with a
- * {@see InvalidWorkflowException} and will be filled in by later phases
- * (US2, US3, US4, US6, US7).
+ * Phase 4 (US2) implements:
+ *   - {@see self::start()}        Start an instance, pin version, append history
+ *   - {@see self::currentStep()}  Return the active step instance(s)
+ *
+ * Phase 5 (US3) implements:
+ *   - {@see self::availableActions()}  Delegate to AvailableActionsResolver
+ *   - {@see self::perform()}           Full orchestrator (eligibility, availability,
+ *                                      handler invocation, quorum, transition,
+ *                                      step enter/exit, history append).
+ *
+ * Phase 6+ (US4-US7) stub for: skipStep, returnToStep, hold, resume, cancel, history.
  *
  * @phpstan-type StepDefinition array{
  *     key: string,
@@ -86,13 +102,25 @@ use Throwable;
 final class WorkflowEngine implements WorkflowEngineContract
 {
     /**
-     * @param  HistoryRecorder|null  $historyRecorder  Optional: when present,
-     *                                                 {@see self::start()} (and later US3-US7 methods) will append
-     *                                                 history rows. When null, a default recorder backed by the
-     *                                                 Laravel `events` container binding is used.
+     * @param  HistoryRecorder|null             $historyRecorder        Optional: when present,
+     *                                                                  {@see self::start()} (and later US3-US7 methods) will append
+     *                                                                  history rows. When null, a default recorder backed by the
+     *                                                                  Laravel `events` container binding is used.
+     * @param  AvailableActionsResolver|null    $actionsResolver        Optional: when present, used by {@see self::availableActions()}
+     *                                                                  and {@see self::perform()}. When null, a default is resolved
+     *                                                                  on demand.
+     * @param  TransitionResolver|null          $transitionResolver     Optional: when present, used by {@see self::perform()}.
+     * @param  QuorumEvaluator|null             $quorumEvaluator        Optional: when present, used by {@see self::perform()}.
+     * @param  AssignmentMaterializer|null      $assignmentMaterializer Optional: when present, used by {@see self::perform()}.
+     * @param  HandlerInvoker|null              $handlerInvoker         Optional: when present, used by {@see self::perform()}.
      */
     public function __construct(
         private readonly ?HistoryRecorder $historyRecorder = null,
+        private readonly ?AvailableActionsResolver $actionsResolver = null,
+        private readonly ?TransitionResolver $transitionResolver = null,
+        private readonly ?QuorumEvaluator $quorumEvaluator = null,
+        private readonly ?AssignmentMaterializer $assignmentMaterializer = null,
+        private readonly ?HandlerInvoker $handlerInvoker = null,
     ) {}
 
     /**
@@ -106,6 +134,52 @@ final class WorkflowEngine implements WorkflowEngineContract
         }
 
         return new HistoryRecorder(app(Dispatcher::class));
+    }
+
+    private function actionsResolver(): AvailableActionsResolver
+    {
+        if ($this->actionsResolver instanceof AvailableActionsResolver) {
+            return $this->actionsResolver;
+        }
+
+        $registry = app()->bound(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
+            ? app()->make(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
+            : (function (): \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry {
+                $r = new \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
+                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer);
+                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer);
+                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer);
+                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer);
+                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher);
+
+                return $r;
+            })();
+
+        $condition = app()->bound(ConditionEvaluator::class)
+            ? app()->make(ConditionEvaluator::class)
+            : new ConditionEvaluator(new \HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator);
+
+        return new AvailableActionsResolver($registry, $condition);
+    }
+
+    private function transitionResolver(): TransitionResolver
+    {
+        return $this->transitionResolver ?? new TransitionResolver;
+    }
+
+    private function quorumEvaluator(): QuorumEvaluator
+    {
+        return $this->quorumEvaluator ?? new QuorumEvaluator;
+    }
+
+    private function assignmentMaterializer(): AssignmentMaterializer
+    {
+        return $this->assignmentMaterializer ?? new AssignmentMaterializer;
+    }
+
+    private function handlerInvoker(): HandlerInvoker
+    {
+        return $this->handlerInvoker ?? new HandlerInvoker;
     }
 
     // -------------------------------------------------------------------
@@ -153,12 +227,28 @@ final class WorkflowEngine implements WorkflowEngineContract
 
             $stepIds = $this->createSteps($workflow, $definition['steps'] ?? []);
 
+            // Resolve the start step's `key` so the `__start__` marker can be
+            // resolved to its actual `from_step_id` (a transition whose
+            // `from = '__start__'` is a convenience for "from the workflow's
+            // start step"; the resolver needs a concrete step id to match).
+            $startStepKey = null;
+            foreach (($definition['steps'] ?? []) as $row) {
+                if (is_array($row) && ($row['type'] ?? null) === StepType::Start->value && isset($row['key'])) {
+                    $startStepKey = (string) $row['key'];
+                    break;
+                }
+            }
+
             // Wire transitions between steps
             foreach (($definition['transitions'] ?? []) as $i => $row) {
                 $this->assertTransitionRow($row, $i, $stepIds);
+                $fromKey = (string) $row['from'];
+                $fromStepId = $fromKey === '__start__'
+                    ? ($startStepKey !== null ? $stepIds[$startStepKey] ?? null : null)
+                    : $stepIds[$fromKey];
                 WorkflowTransition::query()->create([
                     'workflow_id' => $workflow->getKey(),
-                    'from_step_id' => $row['from'] === '__start__' ? null : $stepIds[$row['from']],
+                    'from_step_id' => $fromStepId,
                     'to_step_id' => $stepIds[$row['to']],
                     'type' => $this->coerceEnum(
                         TransitionType::class,
@@ -336,7 +426,7 @@ final class WorkflowEngine implements WorkflowEngineContract
     }
 
     // -------------------------------------------------------------------
-    //  US2-US7 — Runtime stubs (filled in by later phases)
+    //  US4 / US6 / US7 — Stubs (filled in by later phases)
     // -------------------------------------------------------------------
 
     /**
@@ -447,7 +537,7 @@ final class WorkflowEngine implements WorkflowEngineContract
             ->where('status', StepInstanceStatus::Active->value)
             ->with('step')
             ->orderBy('id')
-            ->get();
+            ->cursor();
 
         if ($active->isEmpty()) {
             // Fallback: instance.current_step_id may still be set even before
@@ -470,23 +560,289 @@ final class WorkflowEngine implements WorkflowEngineContract
             return $active->first();
         }
 
-        return $active;
+        return $active->collect();
     }
 
+    /**
+     * Resolve the set of actions a user may perform on the instance right now.
+     *
+     * The result is a deterministic snapshot of the current state, computed by:
+     *   1) Eligibility — the step's `authorization_mode` authorizer
+     *   2) Per-action availability — `general` always; `conditional` via
+     *      `ConditionEvaluator`; `custom` via `CustomActionHandler`
+     *   3) Sort: `sort_order ASC`, then `id ASC` (determinism)
+     */
     public function availableActions(WorkflowInstance $instance, mixed $user = null): ActionSet
     {
-        return new ActionSet([]);
+        return $this->actionsResolver()->resolve($instance, $user);
     }
 
+    /**
+     * Perform an action and advance the instance.
+     *
+     * Orchestrator (single transaction):
+     *   1) Reject terminal instance (WorkflowTerminalException)
+     *   2) Re-validate eligibility server-side
+     *   3) Re-resolve `availableActions` and assert the requested `actionCode`
+     *      is in the set; if not, throw ActionNotAvailableException
+     *   4) Enforce `requires_comment`
+     *   5) Close the leaving step instance (status depends on action.type)
+     *   6) Invoke the action's handler (if any) via HandlerInvoker
+     *   7) Quorum: expire remaining pending assignments when `any` match
+     *   8) Resolve the next step (TransitionResolver)
+     *   9) Open the entering step instance (or close the instance if end)
+     *  10) Materialize assignments for the new step
+     *  11) Append `step_completed`, `action_performed`, `step_entered`
+     *      (or `completed`) history
+     *  12) Return the refreshed instance
+     *
+     * @throws WorkflowTerminalException
+     * @throws NotEligibleException
+     * @throws ActionNotAvailableException
+     * @throws CommentRequiredException
+     * @throws TransitionNotFoundException
+     */
     public function perform(
         WorkflowInstance $instance,
         string $actionCode,
         mixed $user = null,
         ?array $payload = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::perform() will be implemented in US3 (T032-T048).',
-        );
+        $instance = $instance->fresh(['stepInstances.step.actions', 'stepInstances.step.assignees', 'workflow']);
+
+        if ($instance->status->isTerminal()) {
+            throw WorkflowTerminalException::forInstance($instance->status);
+        }
+
+        $current = $this->currentStep($instance);
+        if ($current instanceof Collection) {
+            $current = $current->first();
+        }
+        if (! $current instanceof WorkflowStepInstance) {
+            throw InvalidStateException::forStepInstance(
+                StepInstanceStatus::Active->value,
+                $current->status ?? StepInstanceStatus::Active,
+            );
+        }
+
+        $step = $current->step instanceof WorkflowStep
+            ? $current->step
+            : WorkflowStep::query()->findOrFail($current->step_id);
+
+        // (2) Re-validate eligibility
+        $authorizerRegistry = app()->bound(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
+            ? app()->make(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
+            : null;
+        $authorizer = $authorizerRegistry !== null
+            ? $authorizerRegistry->get($step->authorization_mode?->value ?? 'public')
+            : new \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
+        if (! $authorizer->authorize($user, $instance, $current, $step)) {
+            $userId = is_object($user) && method_exists($user, 'getKey')
+                ? (string) $user->getKey()
+                : (string) ($user ?? 'null');
+            throw NotEligibleException::forUser($userId, (string) $instance->getKey());
+        }
+
+        // (3) Re-resolve and assert actionCode is in the set
+        $resolved = $this->actionsResolver()->resolve($instance, $user)->find($actionCode);
+        if ($resolved === null) {
+            throw ActionNotAvailableException::forAction($actionCode, (string) $instance->getKey());
+        }
+
+        $payload = $payload ?? [];
+        $comment = isset($payload['comment']) ? (string) $payload['comment'] : null;
+
+        // (4) Enforce requires_comment
+        if ($resolved->requiresComment && ($comment === null || trim($comment) === '')) {
+            throw CommentRequiredException::forAction($actionCode);
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use (
+            $instance, $current, $step, $resolved, $actionCode,
+            $payload, $comment, $actorId, $actorType, $now,
+        ): WorkflowInstance {
+            // (5) Close the leaving step instance
+            $leavingTerminal = $this->terminalStatusForAction($resolved->type);
+            $current->status = $leavingTerminal;
+            $current->completed_at = $now;
+            $current->acted_by = $actorId;
+            $current->action_taken = $actionCode;
+            $current->comment = $comment;
+            $current->save();
+
+            // Mark the user's pending assignment as acted (if any)
+            if ($actorId !== null) {
+                WorkflowAssignment::query()
+                    ->where('step_instance_id', $current->getKey())
+                    ->where('status', AssignmentStatus::Pending)
+                    ->where('assignee_id', $actorId)
+                    ->update(['status' => AssignmentStatus::Acted, 'acted_at' => $now]);
+            }
+
+            // (6) Invoke the action's handler
+            $actionModel = WorkflowStepAction::query()
+                ->where('step_id', $step->getKey())
+                ->where('code', $actionCode)
+                ->first();
+            if ($actionModel instanceof WorkflowStepAction
+                && is_string($actionModel->handler)
+                && $actionModel->handler !== ''
+            ) {
+                $result = $this->handlerInvoker()->invokeAction($actionModel, $instance, $payload);
+                if ($result->isFailure()) {
+                    // Re-throw the original throwable; the transaction rolls back.
+                    throw $result->throwable;
+                }
+            }
+
+            // (7) Quorum: expire remaining pending assignments for `any` match
+            $expired = $this->quorumEvaluator()->expirePending($current->getKey());
+
+            // (8) Resolve the next step
+            $transitions = WorkflowTransition::query()
+                ->where('workflow_id', $instance->workflow_id)
+                ->get();
+            $nextStep = $this->transitionResolver()->resolveNextStep($step, $actionModel, $transitions);
+
+            $instance->current_step_id = $nextStep->getKey();
+            $instance->save();
+
+            // (9) Open the entering step instance OR close the instance if `end`
+            $isTerminalStep = $this->terminalStatusForEnteringStep($nextStep) !== null;
+            $enteringInstance = null;
+
+            if ($isTerminalStep) {
+                $instance->status = $this->terminalInstanceStatusForAction($resolved->type);
+                $instance->completed_at = $now;
+                $instance->save();
+            } else {
+                $dueAt = $nextStep->sla_seconds !== null
+                    ? $now->copy()->addSeconds((int) $nextStep->sla_seconds)
+                    : null;
+                $enteringInstance = new WorkflowStepInstance;
+                $enteringInstance->fill([
+                    'workflow_instance_id' => $instance->getKey(),
+                    'step_id' => $nextStep->getKey(),
+                    'status' => StepInstanceStatus::Active,
+                    'entered_at' => $now,
+                    'due_at' => $dueAt,
+                ]);
+                $enteringInstance->save();
+
+                // (10) Materialize assignments for task/approval steps
+                $this->assignmentMaterializer()->materialize($enteringInstance->getKey());
+            }
+
+            // (11) Append history
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $current->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $nextStep->getKey(),
+                'action_code' => $actionCode,
+                'event' => HistoryEvent::StepCompleted,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['status' => $leavingTerminal->value],
+            ]);
+
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $current->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $nextStep->getKey(),
+                'action_code' => $actionCode,
+                'event' => HistoryEvent::ActionPerformed,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => null,
+                'metadata' => ['resolved_action_code' => $actionCode],
+            ]);
+
+            if (! $isTerminalStep) {
+                $this->recorder()->record([
+                    'tenant_id' => $instance->tenant_id,
+                    'workflow_instance_id' => $instance->getKey(),
+                    'step_instance_id' => $enteringInstance?->getKey(),
+                    'from_step_id' => $step->getKey(),
+                    'to_step_id' => $nextStep->getKey(),
+                    'event' => HistoryEvent::StepEntered,
+                    'actor_id' => $actorId,
+                    'actor_type' => $actorType,
+                    'comment' => null,
+                    'metadata' => ['step_type' => $nextStep->type->value],
+                ]);
+            } else {
+                $this->recorder()->record([
+                    'tenant_id' => $instance->tenant_id,
+                    'workflow_instance_id' => $instance->getKey(),
+                    'event' => HistoryEvent::Completed,
+                    'actor_id' => $actorId,
+                    'actor_type' => $actorType,
+                    'comment' => $comment,
+                    'metadata' => ['final_status' => $instance->status->value],
+                ]);
+            }
+
+            if ($expired !== []) {
+                $this->recorder()->record([
+                    'tenant_id' => $instance->tenant_id,
+                    'workflow_instance_id' => $instance->getKey(),
+                    'event' => HistoryEvent::CommentAdded,
+                    'actor_id' => $actorId,
+                    'actor_type' => $actorType,
+                    'comment' => 'Expired pending assignments: '.implode(',', $expired),
+                    'metadata' => ['expired_assignment_ids' => $expired, 'match_mode' => MatchMode::Any->value],
+                ]);
+            }
+
+            return $instance->refresh();
+        });
+    }
+
+    /**
+     * Map an action type to the step-instance terminal status.
+     */
+    private function terminalStatusForAction(ActionType $type): StepInstanceStatus
+    {
+        return match ($type) {
+            ActionType::Reject => StepInstanceStatus::Rejected,
+            ActionType::Skip => StepInstanceStatus::Skipped,
+            ActionType::Return => StepInstanceStatus::Returned,
+            ActionType::Cancel => StepInstanceStatus::Failed,
+            default => StepInstanceStatus::Completed,
+        };
+    }
+
+    /**
+     * Map an action type to the workflow-instance terminal status
+     * when the entering step is terminal (e.g. `end`).
+     */
+    private function terminalInstanceStatusForAction(ActionType $type): InstanceStatus
+    {
+        return match ($type) {
+            ActionType::Reject => InstanceStatus::Rejected,
+            ActionType::Cancel => InstanceStatus::Cancelled,
+            default => InstanceStatus::Completed,
+        };
+    }
+
+    /**
+     * Returns null for non-terminal entering steps, or the terminal
+     * step-instance status for terminal ones (e.g. `end`).
+     */
+    private function terminalStatusForEnteringStep(WorkflowStep $step): ?StepInstanceStatus
+    {
+        return $step->type === StepType::End ? StepInstanceStatus::Completed : null;
     }
 
     public function skipStep(
@@ -601,7 +957,7 @@ final class WorkflowEngine implements WorkflowEngineContract
                 $a->fill([
                     'step_id' => $step->getKey(),
                     'assignee_type' => (string) $assignee['assignee_type'],
-                    'assignee_key' => (string) $assignee['assignee_key'],
+                    'assignee_value' => (string) $assignee['assignee_key'],
                     'weight' => (int) ($assignee['weight'] ?? 0),
                 ]);
                 $a->save();

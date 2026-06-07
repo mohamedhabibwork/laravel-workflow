@@ -21,6 +21,8 @@ final readonly class Action
         public ?int $windowStart = null,
         public ?int $windowEnd = null,
         public ?string $handlerClass = null,
+        public bool $requiresComment = false,
+        public ?int $nextStepId = null,
         public array $metadata = [],
     ) {}
 
