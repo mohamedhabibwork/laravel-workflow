@@ -8,6 +8,8 @@ use HFlow\LaravelWorkflow\Enums\AssigneeType;
 use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 use HFlow\LaravelWorkflow\Models\WorkflowAssignment;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAssignee;
+use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
+use Illuminate\Support\Carbon;
 use Illuminate\Support\Collection;
 
 /**
@@ -32,7 +34,7 @@ final class AssignmentMaterializer
      */
     public function materialize(int $stepInstanceId): Collection
     {
-        $stepInstance = \HFlow\LaravelWorkflow\Models\WorkflowStepInstance::query()
+        $stepInstance = WorkflowStepInstance::query()
             ->with('step.assignees')
             ->findOrFail($stepInstanceId);
 
@@ -47,7 +49,7 @@ final class AssignmentMaterializer
                     'step_instance_id' => $stepInstance->id,
                     'assignee_id' => $assigneeId,
                     'status' => AssignmentStatus::Pending,
-                    'assigned_at' => \Illuminate\Support\Carbon::now(),
+                    'assigned_at' => Carbon::now(),
                 ]);
                 $assignment->save();
                 $created[] = $assignment;

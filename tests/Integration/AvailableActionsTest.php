@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 use HFlow\LaravelWorkflow\Actions\ActionSet;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
-use HFlow\LaravelWorkflow\Models\WorkflowInstance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -18,7 +17,6 @@ use Illuminate\Support\Facades\Schema;
  *  (d) on a `custom` action whose handler returns false, the action is excluded
  *  (e) ordering is deterministic and stable across repeated calls (SC-002)
  */
-
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_avail', function ($t): void {

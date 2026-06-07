@@ -4,8 +4,6 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines\Expressions;
 
-use HFlow\LaravelWorkflow\Enums\Operator;
-
 /**
  * The top-level expression value object.
  *

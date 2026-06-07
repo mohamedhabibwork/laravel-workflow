@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines;
 
-use HFlow\LaravelWorkflow\Enums\TransitionType;
 use HFlow\LaravelWorkflow\Exceptions\TransitionNotFoundException;
 use HFlow\LaravelWorkflow\Models\WorkflowStep;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAction;
@@ -26,7 +25,7 @@ final class TransitionResolver
     public function resolveNextStep(
         WorkflowStep $currentStep,
         ?WorkflowStepAction $action,
-        \Illuminate\Database\Eloquent\Collection $transitions,
+        Collection $transitions,
     ): WorkflowStep {
         // 1) Explicit target on the action
         if ($action !== null && $action->target_step_id !== null) {
@@ -51,7 +50,7 @@ final class TransitionResolver
         }
 
         throw new TransitionNotFoundException(
-            "No transition out of step [{$currentStep->code}] for action [" . ($action?->code ?? 'auto') . ']',
+            "No transition out of step [{$currentStep->code}] for action [".($action?->code ?? 'auto').']',
         );
     }
 }

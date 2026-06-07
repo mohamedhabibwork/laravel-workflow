@@ -5,8 +5,6 @@ declare(strict_types=1);
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
 use HFlow\LaravelWorkflow\Models\WorkflowHistory;
-use HFlow\LaravelWorkflow\Models\WorkflowInstance;
-use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
 
@@ -25,7 +23,6 @@ use Illuminate\Support\Facades\Schema;
  * - review: skippable + returnable + public, has approve action
  * - end: terminal
  */
-
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_history', function ($t): void {

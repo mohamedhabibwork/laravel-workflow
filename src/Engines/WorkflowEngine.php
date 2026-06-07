@@ -6,12 +6,14 @@ namespace HFlow\LaravelWorkflow\Engines;
 
 use HFlow\LaravelWorkflow\Actions\ActionSet;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine as WorkflowEngineContract;
-use HFlow\LaravelWorkflow\Engines\AssignmentMaterializer;
-use HFlow\LaravelWorkflow\Engines\AvailableActionsResolver;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
+use HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher;
+use HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
-use HFlow\LaravelWorkflow\Engines\HandlerInvoker;
-use HFlow\LaravelWorkflow\Engines\QuorumEvaluator;
-use HFlow\LaravelWorkflow\Engines\TransitionResolver;
+use HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
 use HFlow\LaravelWorkflow\Enums\ActorType;
@@ -108,18 +110,18 @@ use Throwable;
 final class WorkflowEngine implements WorkflowEngineContract
 {
     /**
-     * @param  HistoryRecorder|null             $historyRecorder        Optional: when present,
-     *                                                                  {@see self::start()} (and later US3-US7 methods) will append
-     *                                                                  history rows. When null, a default recorder backed by the
-     *                                                                  Laravel `events` container binding is used.
-     * @param  AvailableActionsResolver|null    $actionsResolver        Optional: when present, used by {@see self::availableActions()}
-     *                                                                  and {@see self::perform()}. When null, a default is resolved
-     *                                                                  on demand.
-     * @param  TransitionResolver|null          $transitionResolver     Optional: when present, used by {@see self::perform()}.
-     * @param  QuorumEvaluator|null             $quorumEvaluator        Optional: when present, used by {@see self::perform()}.
-     * @param  AssignmentMaterializer|null      $assignmentMaterializer Optional: when present, used by {@see self::perform()}.
-     * @param  HandlerInvoker|null              $handlerInvoker         Optional: when present, used by {@see self::perform()}.
-     * @param  ConditionEvaluator|null          $conditionEvaluator     Optional: when present, used by skip/return guards.
+     * @param  HistoryRecorder|null  $historyRecorder  Optional: when present,
+     *                                                 {@see self::start()} (and later US3-US7 methods) will append
+     *                                                 history rows. When null, a default recorder backed by the
+     *                                                 Laravel `events` container binding is used.
+     * @param  AvailableActionsResolver|null  $actionsResolver  Optional: when present, used by {@see self::availableActions()}
+     *                                                          and {@see self::perform()}. When null, a default is resolved
+     *                                                          on demand.
+     * @param  TransitionResolver|null  $transitionResolver  Optional: when present, used by {@see self::perform()}.
+     * @param  QuorumEvaluator|null  $quorumEvaluator  Optional: when present, used by {@see self::perform()}.
+     * @param  AssignmentMaterializer|null  $assignmentMaterializer  Optional: when present, used by {@see self::perform()}.
+     * @param  HandlerInvoker|null  $handlerInvoker  Optional: when present, used by {@see self::perform()}.
+     * @param  ConditionEvaluator|null  $conditionEvaluator  Optional: when present, used by skip/return guards.
      */
     public function __construct(
         private readonly ?HistoryRecorder $historyRecorder = null,
@@ -150,22 +152,22 @@ final class WorkflowEngine implements WorkflowEngineContract
             return $this->actionsResolver;
         }
 
-        $registry = app()->bound(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
-            ? app()->make(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
-            : (function (): \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry {
-                $r = new \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
-                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer);
-                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer);
-                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer);
-                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer);
-                $r->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher);
+        $registry = app()->bound(AuthorizerRegistry::class)
+            ? app()->make(AuthorizerRegistry::class)
+            : (function (): AuthorizerRegistry {
+                $r = new AuthorizerRegistry;
+                $r->register(new PublicAuthorizer);
+                $r->register(new RolesAuthorizer);
+                $r->register(new PermissionsAuthorizer);
+                $r->register(new UsersAuthorizer);
+                $r->register(new CustomAuthorizerDispatcher);
 
                 return $r;
             })();
 
         $condition = app()->bound(ConditionEvaluator::class)
             ? app()->make(ConditionEvaluator::class)
-            : new ConditionEvaluator(new \HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator);
+            : new ConditionEvaluator(new ExpressionConditionEvaluator);
 
         return new AvailableActionsResolver($registry, $condition);
     }
@@ -196,7 +198,7 @@ final class WorkflowEngine implements WorkflowEngineContract
             return $this->conditionEvaluator;
         }
 
-        return new ConditionEvaluator(new \HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator);
+        return new ConditionEvaluator(new ExpressionConditionEvaluator);
     }
 
     /**
@@ -676,12 +678,12 @@ final class WorkflowEngine implements WorkflowEngineContract
             : WorkflowStep::query()->findOrFail($current->step_id);
 
         // (2) Re-validate eligibility
-        $authorizerRegistry = app()->bound(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
-            ? app()->make(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class)
+        $authorizerRegistry = app()->bound(AuthorizerRegistry::class)
+            ? app()->make(AuthorizerRegistry::class)
             : null;
         $authorizer = $authorizerRegistry !== null
             ? $authorizerRegistry->get($step->authorization_mode?->value ?? 'public')
-            : new \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
+            : new PublicAuthorizer;
         if (! $authorizer->authorize($user, $instance, $current, $step)) {
             $userId = is_object($user) && method_exists($user, 'getKey')
                 ? (string) $user->getKey()

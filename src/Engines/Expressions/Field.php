@@ -15,7 +15,6 @@ final class Field
     /**
      * Resolve `$path` against `$context` and return the leaf value (or null).
      *
-     * @param  string  $path
      * @param  array<string, mixed>  $context
      */
     public static function resolve(string $path, array $context): mixed

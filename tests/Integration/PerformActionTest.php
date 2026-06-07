@@ -2,6 +2,7 @@
 
 declare(strict_types=1);
 
+use HFlow\LaravelWorkflow\Contracts\CustomActionHandler;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
 use HFlow\LaravelWorkflow\Enums\InstanceStatus;
@@ -12,6 +13,7 @@ use HFlow\LaravelWorkflow\Exceptions\NotEligibleException;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
 use HFlow\LaravelWorkflow\Models\WorkflowHistory;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
+use HFlow\LaravelWorkflow\Models\WorkflowStepAction;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -29,7 +31,6 @@ use Illuminate\Support\Facades\Schema;
  *  (f) action not in available set throws `ActionNotAvailableException`
  *  (g) ineligible user throws `NotEligibleException`
  */
-
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_perf', function ($t): void {
@@ -378,13 +379,13 @@ it('(g) ineligible user throws NotEligibleException', function (): void {
 /**
  * Test fixture — captures the last payload and instance.
  */
-final class TagHandler implements \HFlow\LaravelWorkflow\Contracts\CustomActionHandler
+final class TagHandler implements CustomActionHandler
 {
     public static ?array $lastPayload = null;
 
     public static ?WorkflowInstance $instanceSeen = null;
 
-    public function handle(WorkflowInstance $instance, \HFlow\LaravelWorkflow\Models\WorkflowStepAction $action, array $payload): void
+    public function handle(WorkflowInstance $instance, WorkflowStepAction $action, array $payload): void
     {
         self::$lastPayload = $payload;
         self::$instanceSeen = $instance;

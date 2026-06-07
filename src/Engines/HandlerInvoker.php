@@ -31,8 +31,6 @@ final class HandlerInvoker
      *
      * The handler returns an array that is merged into the step instance's
      * `data` column by the orchestrator.
-     *
-     * @return HandlerInvocationResult
      */
     public function invokeStep(WorkflowStep $step, WorkflowStepInstance $stepInstance): HandlerInvocationResult
     {
@@ -62,7 +60,6 @@ final class HandlerInvoker
      * Invoke the action handler (if any) for a performed action.
      *
      * @param  array<string, mixed>  $payload  Caller-supplied payload (comment, metadata, etc.)
-     * @return HandlerInvocationResult
      */
     public function invokeAction(
         WorkflowStepAction $action,

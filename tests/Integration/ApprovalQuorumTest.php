@@ -8,7 +8,6 @@ use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
 use HFlow\LaravelWorkflow\Models\WorkflowAssignment;
-use HFlow\LaravelWorkflow\Models\WorkflowInstance;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Facades\Schema;
@@ -23,7 +22,6 @@ use Illuminate\Support\Facades\Schema;
  *      the step completes only after both have been `acted` (see TODO below)
  *  (c) on terminal state, `perform` throws `WorkflowTerminalException`
  */
-
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_quorum', function ($t): void {
@@ -43,8 +41,6 @@ beforeEach(function (): void {
 
 /**
  * Minimal user stub — has a numeric key, no role/permission machinery.
- *
- * @param  int  $id
  */
 function quorumUser(int $id): object
 {

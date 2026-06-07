@@ -4,13 +4,12 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines\Conditions;
 
-use HFlow\LaravelWorkflow\Enums\ConditionKind;
-use HFlow\LaravelWorkflow\Enums\Operator;
-use HFlow\LaravelWorkflow\Exceptions\InvalidExpressionException;
 use HFlow\LaravelWorkflow\Engines\Expressions\Clause;
 use HFlow\LaravelWorkflow\Engines\Expressions\ClauseGroup;
 use HFlow\LaravelWorkflow\Engines\Expressions\Expression;
 use HFlow\LaravelWorkflow\Engines\Expressions\Field;
+use HFlow\LaravelWorkflow\Enums\Operator;
+use HFlow\LaravelWorkflow\Exceptions\InvalidExpressionException;
 
 /**
  * Evaluates a structured `field/operator/value` condition JSON.
@@ -25,6 +24,7 @@ use HFlow\LaravelWorkflow\Engines\Expressions\Field;
 final class ExpressionConditionEvaluator
 {
     public const MAX_RECURSION_DEPTH = 10;
+
     public const MAX_CLAUSE_COUNT = 100;
 
     private int $clauseCount = 0;
@@ -49,7 +49,7 @@ final class ExpressionConditionEvaluator
     {
         if ($depth > self::MAX_RECURSION_DEPTH) {
             throw new InvalidExpressionException(
-                "Condition group exceeds max recursion depth of " . self::MAX_RECURSION_DEPTH,
+                'Condition group exceeds max recursion depth of '.self::MAX_RECURSION_DEPTH,
             );
         }
 
@@ -59,7 +59,7 @@ final class ExpressionConditionEvaluator
             $this->clauseCount++;
             if ($this->clauseCount > self::MAX_CLAUSE_COUNT) {
                 throw new InvalidExpressionException(
-                    "Condition exceeds max clause count of " . self::MAX_CLAUSE_COUNT,
+                    'Condition exceeds max clause count of '.self::MAX_CLAUSE_COUNT,
                 );
             }
 

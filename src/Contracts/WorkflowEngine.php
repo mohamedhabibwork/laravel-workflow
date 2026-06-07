@@ -5,6 +5,9 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Contracts;
 
 use HFlow\LaravelWorkflow\Actions\ActionSet;
+use HFlow\LaravelWorkflow\Exceptions\ReturnNotAllowedException;
+use HFlow\LaravelWorkflow\Exceptions\SkipNotAllowedException;
+use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
 use HFlow\LaravelWorkflow\Facades\LaravelWorkflow;
 use HFlow\LaravelWorkflow\Models\Workflow;
 use HFlow\LaravelWorkflow\Models\WorkflowHistory;
@@ -120,8 +123,8 @@ interface WorkflowEngine
      * the skip guard fails. Throws WorkflowTerminalException when the
      * instance is already terminal.
      *
-     * @throws \HFlow\LaravelWorkflow\Exceptions\SkipNotAllowedException
-     * @throws \HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException
+     * @throws SkipNotAllowedException
+     * @throws WorkflowTerminalException
      */
     public function skip(
         WorkflowInstance $instance,
@@ -137,12 +140,12 @@ interface WorkflowEngine
      * instance is already terminal.
      *
      * @param  WorkflowStep|string|null  $targetStep  Target to return to.
-     *                                                 `null` = most recently
-     *                                                 completed step in the
-     *                                                 instance.
+     *                                                `null` = most recently
+     *                                                completed step in the
+     *                                                instance.
      *
-     * @throws \HFlow\LaravelWorkflow\Exceptions\ReturnNotAllowedException
-     * @throws \HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException
+     * @throws ReturnNotAllowedException
+     * @throws WorkflowTerminalException
      */
     public function return(
         WorkflowInstance $instance,

@@ -2,14 +2,15 @@
 
 declare(strict_types=1);
 
-use HFlow\LaravelWorkflow\Enums\AssigneeType;
-use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
-use HFlow\LaravelWorkflow\Enums\StepType;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
 use HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher;
 use HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer;
+use HFlow\LaravelWorkflow\Enums\AssigneeType;
+use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
+use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Models\Workflow;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
 use HFlow\LaravelWorkflow\Models\WorkflowStep;
@@ -23,7 +24,6 @@ use Illuminate\Support\Str;
  * Each test creates a real step with assignees and exercises the
  * `authorize()` predicate.
  */
-
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     $this->workflow = new Workflow;
@@ -93,7 +93,7 @@ it('PublicAuthorizer always returns true regardless of user', function (): void 
     $authorizer = new PublicAuthorizer;
 
     expect($authorizer->authorize(null, $instance, $stepInstance, $step))->toBeTrue()
-        ->and($authorizer->authorize(new \stdClass, $instance, $stepInstance, $step))->toBeTrue();
+        ->and($authorizer->authorize(new stdClass, $instance, $stepInstance, $step))->toBeTrue();
 });
 
 it('RolesAuthorizer returns false for a non-object user', function (): void {
@@ -248,7 +248,7 @@ it('CustomAuthorizerDispatcher returns false for missing FQCN or non-existent cl
 it('CustomAuthorizerDispatcher returns false when FQCN does not implement the contract', function (): void {
     [$step, $stepInstance, $instance] = makeAuthorizerFixtures($this->workflow, AuthorizationMode::Custom);
 
-    $step->custom_authorizer = \stdClass::class;
+    $step->custom_authorizer = stdClass::class;
     $step->save();
 
     expect((new CustomAuthorizerDispatcher)->authorize(null, $instance, $stepInstance, $step))->toBeFalse();
@@ -257,18 +257,18 @@ it('CustomAuthorizerDispatcher returns false when FQCN does not implement the co
 /**
  * Test fixture for CustomAuthorizerDispatcher delegation.
  */
-final class CustomAuthorizerAlwaysYes implements \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface
+final class CustomAuthorizerAlwaysYes implements AuthorizerInterface
 {
-    public function mode(): \HFlow\LaravelWorkflow\Enums\AuthorizationMode
+    public function mode(): AuthorizationMode
     {
-        return \HFlow\LaravelWorkflow\Enums\AuthorizationMode::Custom;
+        return AuthorizationMode::Custom;
     }
 
     public function authorize(
         mixed $user,
-        \HFlow\LaravelWorkflow\Models\WorkflowInstance $instance,
-        \HFlow\LaravelWorkflow\Models\WorkflowStepInstance $stepInstance,
-        \HFlow\LaravelWorkflow\Models\WorkflowStep $step,
+        WorkflowInstance $instance,
+        WorkflowStepInstance $stepInstance,
+        WorkflowStep $step,
     ): bool {
         return true;
     }

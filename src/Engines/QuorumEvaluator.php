@@ -7,6 +7,7 @@ namespace HFlow\LaravelWorkflow\Engines;
 use HFlow\LaravelWorkflow\Enums\AssignmentStatus;
 use HFlow\LaravelWorkflow\Enums\MatchMode;
 use HFlow\LaravelWorkflow\Models\WorkflowAssignment;
+use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Support\Facades\DB;
 
 /**
@@ -75,7 +76,7 @@ final class QuorumEvaluator
 
     private function matchMode(int $stepInstanceId): MatchMode
     {
-        $stepInstance = \HFlow\LaravelWorkflow\Models\WorkflowStepInstance::query()
+        $stepInstance = WorkflowStepInstance::query()
             ->with('step')
             ->find($stepInstanceId);
 

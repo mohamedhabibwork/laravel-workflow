@@ -4,8 +4,10 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines\Authorizers;
 
+use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
+
 /**
- * Registry that maps an {@see \HFlow\LaravelWorkflow\Enums\AuthorizationMode}
+ * Registry that maps an {@see AuthorizationMode}
  * to the concrete {@see AuthorizerInterface} implementation that should be
  * used for a given step.
  *

@@ -109,7 +109,7 @@ if (is_dir(__DIR__.'/../src/Engines')) {
 
         $offenders = [];
 
-        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($enginesDir));
+        $rii = new RecursiveIteratorIterator(new RecursiveDirectoryIterator($enginesDir));
 
         foreach ($rii as $file) {
             if (! $file->isFile() || $file->getExtension() !== 'php') {

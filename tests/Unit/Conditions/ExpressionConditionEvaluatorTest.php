@@ -3,13 +3,13 @@
 declare(strict_types=1);
 
 use HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator;
+use HFlow\LaravelWorkflow\Engines\Expressions\Field;
 use HFlow\LaravelWorkflow\Enums\Operator;
 use HFlow\LaravelWorkflow\Exceptions\InvalidExpressionException;
 
 /**
  * T048 — Unit tests for the 14 operators + recursion/clause caps.
  */
-
 it('evaluates eq against a subject path', function (): void {
     $ev = new ExpressionConditionEvaluator;
     $result = $ev->evaluateArray([
@@ -204,10 +204,10 @@ it('Field::resolve walks dotted paths across subject/context/user/instance', fun
         'instance' => ['uuid' => 'inst-123'],
     ];
 
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('subject.order.total', $context))->toBe(250);
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('context.feature', $context))->toBe('v2');
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('user.id', $context))->toBe(7);
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('instance.uuid', $context))->toBe('inst-123');
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('missing', $context))->toBeNull();
-    expect(\HFlow\LaravelWorkflow\Engines\Expressions\Field::resolve('subject.missing.deep', $context))->toBeNull();
+    expect(Field::resolve('subject.order.total', $context))->toBe(250);
+    expect(Field::resolve('context.feature', $context))->toBe('v2');
+    expect(Field::resolve('user.id', $context))->toBe(7);
+    expect(Field::resolve('instance.uuid', $context))->toBe('inst-123');
+    expect(Field::resolve('missing', $context))->toBeNull();
+    expect(Field::resolve('subject.missing.deep', $context))->toBeNull();
 });

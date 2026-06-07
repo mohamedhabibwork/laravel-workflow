@@ -6,13 +6,15 @@ namespace HFlow\LaravelWorkflow\Engines;
 
 use HFlow\LaravelWorkflow\Actions\Action;
 use HFlow\LaravelWorkflow\Actions\ActionSet;
-use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
-use HFlow\LaravelWorkflow\Enums\ActionType;
-use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
 use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
 use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
+use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
+use HFlow\LaravelWorkflow\Enums\ActionType;
+use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
+use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
+use HFlow\LaravelWorkflow\Models\WorkflowStep;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAction;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 
@@ -152,11 +154,11 @@ final class AvailableActionsResolver
     /**
      * Pick the authorizer matching the step's `authorization_mode`.
      */
-    private function authorizerFor(\HFlow\LaravelWorkflow\Models\WorkflowStep $step): AuthorizerInterface
+    private function authorizerFor(WorkflowStep $step): AuthorizerInterface
     {
-        $mode = $step->authorization_mode instanceof \HFlow\LaravelWorkflow\Enums\AuthorizationMode
+        $mode = $step->authorization_mode instanceof AuthorizationMode
             ? $step->authorization_mode
-            : \HFlow\LaravelWorkflow\Enums\AuthorizationMode::from((string) $step->authorization_mode);
+            : AuthorizationMode::from((string) $step->authorization_mode);
 
         return $this->authorizers->get($mode->value);
     }

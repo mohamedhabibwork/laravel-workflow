@@ -13,17 +13,30 @@ use HFlow\LaravelWorkflow\Contracts\TenantScopeProvider;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
 use HFlow\LaravelWorkflow\Engines\Actions\ActionHandlerResolver;
 use HFlow\LaravelWorkflow\Engines\Actions\DefaultActionHandler;
+use HFlow\LaravelWorkflow\Engines\AssignmentMaterializer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
+use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
 use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerResolver;
+use HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher;
 use HFlow\LaravelWorkflow\Engines\Authorizers\DefaultAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer;
+use HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Automation\AutomationRunner;
+use HFlow\LaravelWorkflow\Engines\AvailableActionsResolver;
+use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
 use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluatorResolver;
 use HFlow\LaravelWorkflow\Engines\Conditions\DefaultConditionEvaluator;
+use HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator;
+use HFlow\LaravelWorkflow\Engines\HandlerInvoker;
 use HFlow\LaravelWorkflow\Engines\History\HistoryMaterializer;
 use HFlow\LaravelWorkflow\Engines\History\QuorumEvaluator;
 use HFlow\LaravelWorkflow\Engines\Resolvers\DefaultResolver;
 use HFlow\LaravelWorkflow\Engines\Resolvers\ResolverRegistry;
 use HFlow\LaravelWorkflow\Engines\Steps\DefaultStepHandler;
 use HFlow\LaravelWorkflow\Engines\Steps\StepHandlerResolver;
+use HFlow\LaravelWorkflow\Engines\TransitionResolver;
 use HFlow\LaravelWorkflow\Engines\WorkflowEngine as WorkflowEngineImpl;
 use HFlow\LaravelWorkflow\Events\ActionPerformed;
 use HFlow\LaravelWorkflow\Events\AssignmentCompleted;
@@ -120,36 +133,36 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
      */
     protected function registerCoreResolvers(): void
     {
-        $authorizerContract = \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface::class;
+        $authorizerContract = AuthorizerInterface::class;
         if (! $this->app->bound($authorizerContract) && class_exists($authorizerContract)) {
             $configured = config('workflow.core.default_authorizer');
             $default = is_string($configured) && class_exists($configured)
                 ? $configured
-                : \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer::class;
+                : PublicAuthorizer::class;
 
             $this->app->singleton($authorizerContract, $default);
         }
 
-        $registryContract = \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry::class;
+        $registryContract = AuthorizerRegistry::class;
         if (! $this->app->bound($registryContract) && class_exists($registryContract)) {
-            $this->app->singleton($registryContract, function (): \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry {
-                $registry = new \HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
-                $registry->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer);
-                $registry->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer);
-                $registry->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer);
-                $registry->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer);
-                $registry->register(new \HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher);
+            $this->app->singleton($registryContract, function (): AuthorizerRegistry {
+                $registry = new AuthorizerRegistry;
+                $registry->register(new PublicAuthorizer);
+                $registry->register(new RolesAuthorizer);
+                $registry->register(new PermissionsAuthorizer);
+                $registry->register(new UsersAuthorizer);
+                $registry->register(new CustomAuthorizerDispatcher);
 
                 return $registry;
             });
         }
 
-        $conditionContract = \HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator::class;
+        $conditionContract = ConditionEvaluator::class;
         if (! $this->app->bound($conditionContract) && class_exists($conditionContract)) {
             $this->app->singleton(
                 $conditionContract,
-                fn ($app) => new \HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator(
-                    $app->make(\HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator::class),
+                fn ($app) => new ConditionEvaluator(
+                    $app->make(ExpressionConditionEvaluator::class),
                 ),
             );
         }
@@ -262,23 +275,23 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
 
             return new WorkflowEngineImpl(
                 historyRecorder: $app->make(HistoryRecorder::class),
-                actionsResolver: class_exists(\HFlow\LaravelWorkflow\Engines\AvailableActionsResolver::class)
-                    ? new \HFlow\LaravelWorkflow\Engines\AvailableActionsResolver(
-                        $app->make(\HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface::class),
-                        $app->make(\HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator::class),
+                actionsResolver: class_exists(AvailableActionsResolver::class)
+                    ? new AvailableActionsResolver(
+                        $app->make(AuthorizerInterface::class),
+                        $app->make(ConditionEvaluator::class),
                     )
                     : null,
-                transitionResolver: class_exists(\HFlow\LaravelWorkflow\Engines\TransitionResolver::class)
-                    ? $app->make(\HFlow\LaravelWorkflow\Engines\TransitionResolver::class)
+                transitionResolver: class_exists(TransitionResolver::class)
+                    ? $app->make(TransitionResolver::class)
                     : null,
-                quorumEvaluator: class_exists(\HFlow\LaravelWorkflow\Engines\QuorumEvaluator::class)
-                    ? $app->make(\HFlow\LaravelWorkflow\Engines\QuorumEvaluator::class)
+                quorumEvaluator: class_exists(Engines\QuorumEvaluator::class)
+                    ? $app->make(Engines\QuorumEvaluator::class)
                     : null,
-                assignmentMaterializer: class_exists(\HFlow\LaravelWorkflow\Engines\AssignmentMaterializer::class)
-                    ? $app->make(\HFlow\LaravelWorkflow\Engines\AssignmentMaterializer::class)
+                assignmentMaterializer: class_exists(AssignmentMaterializer::class)
+                    ? $app->make(AssignmentMaterializer::class)
                     : null,
-                handlerInvoker: class_exists(\HFlow\LaravelWorkflow\Engines\HandlerInvoker::class)
-                    ? $app->make(\HFlow\LaravelWorkflow\Engines\HandlerInvoker::class)
+                handlerInvoker: class_exists(HandlerInvoker::class)
+                    ? $app->make(HandlerInvoker::class)
                     : null,
             );
         });

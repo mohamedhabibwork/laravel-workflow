@@ -16,6 +16,7 @@ namespace HFlow\LaravelWorkflow\Engines\Expressions;
 final readonly class ClauseGroup
 {
     public const OP_AND = 'and';
+
     public const OP_OR = 'or';
 
     /**
