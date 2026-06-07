@@ -29,7 +29,7 @@ it('implements every method declared in the WorkflowEngine contract', function (
 })->with([
     'define', 'activate', 'versions', 'createNewVersion',
     'start', 'currentStep', 'availableActions', 'perform',
-    'skipStep', 'returnToStep',
+    'skip', 'return',
     'hold', 'resume', 'cancel',
     'history',
 ]);
@@ -124,4 +124,35 @@ it('exposes the exact US1 signatures required by the contract', function (): voi
         ->and($params[0]->getName())->toBe('key')
         ->and((string) $params[0]->getType())->toBe('string')
         ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Models\\Workflow');
+});
+
+it('exposes the exact US4 signatures required by the contract', function (): void {
+    $ref = new ReflectionClass(WorkflowEngineImpl::class);
+
+    // skip(WorkflowInstance, mixed=null, ?string=null): WorkflowInstance
+    $m = $ref->getMethod('skip');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(3)
+        ->and($params[0]->getName())->toBe('instance')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance')
+        ->and($params[1]->getName())->toBe('user')
+        ->and($params[1]->isDefaultValueAvailable())->toBeTrue()
+        ->and($params[2]->getName())->toBe('comment')
+        ->and($params[2]->isDefaultValueAvailable())->toBeTrue()
+        ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance');
+
+    // return(WorkflowInstance, WorkflowStep|string|null=null, mixed=null, ?string=null): WorkflowInstance
+    $m = $ref->getMethod('return');
+    $params = $m->getParameters();
+    expect($params)->toHaveCount(4)
+        ->and($params[0]->getName())->toBe('instance')
+        ->and((string) $params[0]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance')
+        ->and($params[1]->getName())->toBe('targetStep')
+        ->and((string) $params[1]->getType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowStep|string|null')
+        ->and($params[1]->isDefaultValueAvailable())->toBeTrue()
+        ->and($params[2]->getName())->toBe('user')
+        ->and($params[2]->isDefaultValueAvailable())->toBeTrue()
+        ->and($params[3]->getName())->toBe('comment')
+        ->and($params[3]->isDefaultValueAvailable())->toBeTrue()
+        ->and((string) $m->getReturnType())->toBe('HFlow\\LaravelWorkflow\\Models\\WorkflowInstance');
 });

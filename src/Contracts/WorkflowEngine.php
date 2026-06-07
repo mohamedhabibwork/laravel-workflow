@@ -9,6 +9,7 @@ use HFlow\LaravelWorkflow\Facades\LaravelWorkflow;
 use HFlow\LaravelWorkflow\Models\Workflow;
 use HFlow\LaravelWorkflow\Models\WorkflowHistory;
 use HFlow\LaravelWorkflow\Models\WorkflowInstance;
+use HFlow\LaravelWorkflow\Models\WorkflowStep;
 use HFlow\LaravelWorkflow\Models\WorkflowStepInstance;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Support\Collection;
@@ -114,23 +115,40 @@ interface WorkflowEngine
 
     /**
      * Skip the current step.
+     *
+     * Throws SkipNotAllowedException when the step is not skippable or
+     * the skip guard fails. Throws WorkflowTerminalException when the
+     * instance is already terminal.
+     *
+     * @throws \HFlow\LaravelWorkflow\Exceptions\SkipNotAllowedException
+     * @throws \HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException
      */
-    public function skipStep(
+    public function skip(
         WorkflowInstance $instance,
-        ?string $stepKey = null,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance;
 
     /**
      * Return to an earlier step.
+     *
+     * Throws ReturnNotAllowedException when the step is not returnable or
+     * the return guard fails. Throws WorkflowTerminalException when the
+     * instance is already terminal.
+     *
+     * @param  WorkflowStep|string|null  $targetStep  Target to return to.
+     *                                                 `null` = most recently
+     *                                                 completed step in the
+     *                                                 instance.
+     *
+     * @throws \HFlow\LaravelWorkflow\Exceptions\ReturnNotAllowedException
+     * @throws \HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException
      */
-    public function returnToStep(
+    public function return(
         WorkflowInstance $instance,
-        string $currentStepKey,
-        string $targetStepKey,
-        ?string $reason = null,
-        mixed $actor = null,
+        WorkflowStep|string|null $targetStep = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance;
 
     // -------------------------------------------------------------------
@@ -142,8 +160,8 @@ interface WorkflowEngine
      */
     public function hold(
         WorkflowInstance $instance,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance;
 
     /**
@@ -151,7 +169,7 @@ interface WorkflowEngine
      */
     public function resume(
         WorkflowInstance $instance,
-        mixed $actor = null,
+        mixed $user = null,
     ): WorkflowInstance;
 
     /**
@@ -159,8 +177,8 @@ interface WorkflowEngine
      */
     public function cancel(
         WorkflowInstance $instance,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance;
 
     // -------------------------------------------------------------------

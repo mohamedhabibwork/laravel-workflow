@@ -4,11 +4,14 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Engines;
 
-use HFlow\LaravelWorkflow\Actions\Action;
 use HFlow\LaravelWorkflow\Actions\ActionSet;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine as WorkflowEngineContract;
-use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
+use HFlow\LaravelWorkflow\Engines\AssignmentMaterializer;
+use HFlow\LaravelWorkflow\Engines\AvailableActionsResolver;
 use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
+use HFlow\LaravelWorkflow\Engines\HandlerInvoker;
+use HFlow\LaravelWorkflow\Engines\QuorumEvaluator;
+use HFlow\LaravelWorkflow\Engines\TransitionResolver;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
 use HFlow\LaravelWorkflow\Enums\ActorType;
@@ -27,6 +30,9 @@ use HFlow\LaravelWorkflow\Exceptions\CommentRequiredException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidStateException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidWorkflowException;
 use HFlow\LaravelWorkflow\Exceptions\NotEligibleException;
+use HFlow\LaravelWorkflow\Exceptions\ReturnNotAllowedException;
+use HFlow\LaravelWorkflow\Exceptions\SkipNotAllowedException;
+use HFlow\LaravelWorkflow\Exceptions\TransitionNotFoundException;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowSubjectMismatchException;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
 use HFlow\LaravelWorkflow\Models\Workflow;
@@ -113,6 +119,7 @@ final class WorkflowEngine implements WorkflowEngineContract
      * @param  QuorumEvaluator|null             $quorumEvaluator        Optional: when present, used by {@see self::perform()}.
      * @param  AssignmentMaterializer|null      $assignmentMaterializer Optional: when present, used by {@see self::perform()}.
      * @param  HandlerInvoker|null              $handlerInvoker         Optional: when present, used by {@see self::perform()}.
+     * @param  ConditionEvaluator|null          $conditionEvaluator     Optional: when present, used by skip/return guards.
      */
     public function __construct(
         private readonly ?HistoryRecorder $historyRecorder = null,
@@ -121,6 +128,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         private readonly ?QuorumEvaluator $quorumEvaluator = null,
         private readonly ?AssignmentMaterializer $assignmentMaterializer = null,
         private readonly ?HandlerInvoker $handlerInvoker = null,
+        private readonly ?ConditionEvaluator $conditionEvaluator = null,
     ) {}
 
     /**
@@ -180,6 +188,44 @@ final class WorkflowEngine implements WorkflowEngineContract
     private function handlerInvoker(): HandlerInvoker
     {
         return $this->handlerInvoker ?? new HandlerInvoker;
+    }
+
+    private function conditionEvaluator(): ConditionEvaluator
+    {
+        if ($this->conditionEvaluator instanceof ConditionEvaluator) {
+            return $this->conditionEvaluator;
+        }
+
+        return new ConditionEvaluator(new \HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator);
+    }
+
+    /**
+     * Build the runtime context used to evaluate guard conditions
+     * (subject.*, context.*, user.*, instance.*).
+     *
+     * @return array<string, mixed>
+     */
+    private function buildConditionContext(
+        WorkflowInstance $instance,
+        WorkflowStep $step,
+        mixed $user,
+    ): array {
+        $context = (array) ($instance->context ?? []);
+
+        return [
+            'subject' => $instance->subject,
+            'context' => $context,
+            'user' => $user,
+            'instance' => [
+                'id' => $instance->getKey(),
+                'uuid' => $instance->uuid,
+                'status' => $instance->status?->value,
+                'workflow_id' => $instance->workflow_id,
+                'workflow_version' => (int) $instance->workflow_version,
+                'current_step_id' => $instance->current_step_id,
+                'current_step_code' => $step->code,
+            ],
+        ];
     }
 
     // -------------------------------------------------------------------
@@ -600,7 +646,7 @@ final class WorkflowEngine implements WorkflowEngineContract
      * @throws NotEligibleException
      * @throws ActionNotAvailableException
      * @throws CommentRequiredException
-     * @throws TransitionNotFoundException
+     * @throws TransitionNotFoundExceptio
      */
     public function perform(
         WorkflowInstance $instance,
@@ -845,33 +891,403 @@ final class WorkflowEngine implements WorkflowEngineContract
         return $step->type === StepType::End ? StepInstanceStatus::Completed : null;
     }
 
-    public function skipStep(
+    /**
+     * Skip the current step.
+     *
+     *   1) Reject terminal instance.
+     *   2) Reject non-skippable step (SkipNotAllowedException).
+     *   3) Find a `type = skip` transition; if it has a guard condition
+     *      and the guard fails, reject.
+     *   4) Close the leaving step instance with `status = skipped`.
+     *   5) Resolve target: explicit `to_step_id` on the skip transition
+     *      if present, else next step by ascending `position` (sequential
+     *      fallback). Throw TransitionNotFoundException if no target.
+     *   6) Open the entering step instance; materialize assignments.
+     *   7) Append `skipped` + `step_entered` history.
+     *
+     * @throws WorkflowTerminalException
+     * @throws SkipNotAllowedException
+     * @throws TransitionNotFoundException
+     */
+    public function skip(
         WorkflowInstance $instance,
-        ?string $stepKey = null,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::skipStep() will be implemented in US4 (T049-T053).',
-        );
+        $instance = $instance->fresh(['stepInstances.step', 'stepInstances.step.assignees', 'workflow']);
+
+        if ($instance->status->isTerminal()) {
+            throw WorkflowTerminalException::forInstance($instance->status);
+        }
+
+        $current = $this->currentStep($instance);
+        if ($current instanceof Collection) {
+            $current = $current->first();
+        }
+        if (! $current instanceof WorkflowStepInstance) {
+            throw InvalidStateException::forStepInstance(
+                StepInstanceStatus::Active->value,
+                $current->status ?? StepInstanceStatus::Active,
+            );
+        }
+
+        $step = $current->step instanceof WorkflowStep
+            ? $current->step
+            : WorkflowStep::query()->findOrFail($current->step_id);
+
+        // (2) is_skippable flag
+        if (! $step->is_skippable) {
+            throw SkipNotAllowedException::forStep((string) $step->getKey());
+        }
+
+        // (3) Find skip transition (type=skip, from=current)
+        $skipTransition = WorkflowTransition::query()
+            ->where('workflow_id', $instance->workflow_id)
+            ->where('from_step_id', $step->getKey())
+            ->where('type', TransitionType::Skip->value)
+            ->first();
+
+        // Evaluate the transition's guard (if any) — must pass
+        if ($skipTransition instanceof WorkflowTransition
+            && $skipTransition->condition_id !== null
+        ) {
+            $cond = WorkflowCondition::query()->find($skipTransition->condition_id);
+            if ($cond instanceof WorkflowCondition) {
+                $context = $this->buildConditionContext($instance, $step, $user);
+                $payload = (array) ($cond->expression ?? []);
+                if (! $this->conditionEvaluator()->evaluate($payload, $context)) {
+                    throw SkipNotAllowedException::forStep((string) $step->getKey());
+                }
+            }
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use (
+            $instance, $current, $step, $skipTransition, $comment, $actorId, $actorType, $now,
+        ): WorkflowInstance {
+            // (4) Close the leaving step instance
+            $current->status = StepInstanceStatus::Skipped;
+            $current->completed_at = $now;
+            $current->acted_by = $actorId;
+            $current->action_taken = 'skip';
+            $current->comment = $comment;
+            $current->save();
+
+            // Mark the user's pending assignment as acted
+            if ($actorId !== null) {
+                WorkflowAssignment::query()
+                    ->where('step_instance_id', $current->getKey())
+                    ->where('status', AssignmentStatus::Pending)
+                    ->where('assignee_id', $actorId)
+                    ->update(['status' => AssignmentStatus::Acted, 'acted_at' => $now]);
+            }
+
+            // (5) Resolve target step
+            $nextStep = null;
+            if ($skipTransition instanceof WorkflowTransition && $skipTransition->to_step_id !== null) {
+                $nextStep = WorkflowStep::query()->find($skipTransition->to_step_id);
+            }
+
+            if (! $nextStep instanceof WorkflowStep) {
+                // Sequential fallback: next step by ascending `position`
+                $nextStep = WorkflowStep::query()
+                    ->where('workflow_id', $instance->workflow_id)
+                    ->where('id', '!=', $step->getKey())
+                    ->where('position', '>', (int) $step->position)
+                    ->orderBy('position')
+                    ->first();
+            }
+
+            if (! $nextStep instanceof WorkflowStep) {
+                throw new TransitionNotFoundException(
+                    "No target step for skip from [{$step->code}] (no skip transition, no next-by-position).",
+                );
+            }
+
+            $instance->current_step_id = $nextStep->getKey();
+
+            // (6) Open the entering step instance OR close the instance if `end`
+            $isTerminalStep = $this->terminalStatusForEnteringStep($nextStep) !== null;
+            $enteringInstance = null;
+
+            if ($isTerminalStep) {
+                $instance->status = InstanceStatus::Completed;
+                $instance->completed_at = $now;
+                $instance->save();
+            } else {
+                $dueAt = $nextStep->sla_seconds !== null
+                    ? $now->copy()->addSeconds((int) $nextStep->sla_seconds)
+                    : null;
+                $enteringInstance = new WorkflowStepInstance;
+                $enteringInstance->fill([
+                    'workflow_instance_id' => $instance->getKey(),
+                    'step_id' => $nextStep->getKey(),
+                    'status' => StepInstanceStatus::Active,
+                    'entered_at' => $now,
+                    'due_at' => $dueAt,
+                ]);
+                $enteringInstance->save();
+
+                $this->assignmentMaterializer()->materialize($enteringInstance->getKey());
+                $instance->save();
+            }
+
+            // (7) Append history
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $current->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $nextStep->getKey(),
+                'action_code' => 'skip',
+                'event' => HistoryEvent::Skipped,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['reason' => 'skipped'],
+            ]);
+
+            if (! $isTerminalStep) {
+                $this->recorder()->record([
+                    'tenant_id' => $instance->tenant_id,
+                    'workflow_instance_id' => $instance->getKey(),
+                    'step_instance_id' => $enteringInstance?->getKey(),
+                    'from_step_id' => $step->getKey(),
+                    'to_step_id' => $nextStep->getKey(),
+                    'event' => HistoryEvent::StepEntered,
+                    'actor_id' => $actorId,
+                    'actor_type' => $actorType,
+                    'comment' => null,
+                    'metadata' => ['step_type' => $nextStep->type->value],
+                ]);
+            } else {
+                $this->recorder()->record([
+                    'tenant_id' => $instance->tenant_id,
+                    'workflow_instance_id' => $instance->getKey(),
+                    'event' => HistoryEvent::Completed,
+                    'actor_id' => $actorId,
+                    'actor_type' => $actorType,
+                    'comment' => $comment,
+                    'metadata' => ['final_status' => $instance->status->value],
+                ]);
+            }
+
+            return $instance->refresh();
+        });
     }
 
-    public function returnToStep(
+    /**
+     * Return to an earlier step.
+     *
+     *   1) Reject terminal instance.
+     *   2) Reject non-returnable step (ReturnNotAllowedException).
+     *   3) Resolve target: explicit `$targetStep` (WorkflowStep|string)
+     *      → that step; else the most recently completed step instance
+     *      for this instance; else reject.
+     *   4) If a `type = return` transition is present and has a guard,
+     *      evaluate it; reject if it fails.
+     *   5) Close the current step instance with `status = returned`.
+     *   6) Open a NEW active step instance for the target.
+     *   7) Materialize assignments.
+     *   8) Append `returned` + `step_entered` history. Prior history
+     *      rows are never modified.
+     *
+     * @throws WorkflowTerminalException
+     * @throws ReturnNotAllowedException
+     */
+    public function return(
         WorkflowInstance $instance,
-        string $currentStepKey,
-        string $targetStepKey,
-        ?string $reason = null,
-        mixed $actor = null,
+        WorkflowStep|string|null $targetStep = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::returnToStep() will be implemented in US4 (T049-T053).',
-        );
+        $instance = $instance->fresh(['stepInstances.step', 'stepInstances.step.assignees', 'workflow']);
+
+        if ($instance->status->isTerminal()) {
+            throw WorkflowTerminalException::forInstance($instance->status);
+        }
+
+        $current = $this->currentStep($instance);
+        if ($current instanceof Collection) {
+            $current = $current->first();
+        }
+        if (! $current instanceof WorkflowStepInstance) {
+            throw InvalidStateException::forStepInstance(
+                StepInstanceStatus::Active->value,
+                $current->status ?? StepInstanceStatus::Active,
+            );
+        }
+
+        $step = $current->step instanceof WorkflowStep
+            ? $current->step
+            : WorkflowStep::query()->findOrFail($current->step_id);
+
+        if (! $step->is_returnable) {
+            throw ReturnNotAllowedException::forStep((string) $step->getKey());
+        }
+
+        // (3) Resolve target
+        $target = $this->resolveReturnTarget($instance, $step, $targetStep);
+        if (! $target instanceof WorkflowStep) {
+            throw ReturnNotAllowedException::forStep((string) $step->getKey());
+        }
+
+        // (4) Evaluate any return-transition guard
+        $returnTransition = WorkflowTransition::query()
+            ->where('workflow_id', $instance->workflow_id)
+            ->where('from_step_id', $step->getKey())
+            ->where('to_step_id', $target->getKey())
+            ->where('type', TransitionType::Return->value)
+            ->first();
+        if ($returnTransition instanceof WorkflowTransition && $returnTransition->condition_id !== null) {
+            $cond = WorkflowCondition::query()->find($returnTransition->condition_id);
+            if ($cond instanceof WorkflowCondition) {
+                $context = $this->buildConditionContext($instance, $step, $user);
+                $payload = (array) ($cond->expression ?? []);
+                if (! $this->conditionEvaluator()->evaluate($payload, $context)) {
+                    throw ReturnNotAllowedException::forStep((string) $step->getKey());
+                }
+            }
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use (
+            $instance, $current, $step, $target, $comment, $actorId, $actorType, $now,
+        ): WorkflowInstance {
+            // (5) Close current as returned
+            $current->status = StepInstanceStatus::Returned;
+            $current->completed_at = $now;
+            $current->acted_by = $actorId;
+            $current->action_taken = 'return';
+            $current->comment = $comment;
+            $current->save();
+
+            if ($actorId !== null) {
+                WorkflowAssignment::query()
+                    ->where('step_instance_id', $current->getKey())
+                    ->where('status', AssignmentStatus::Pending)
+                    ->where('assignee_id', $actorId)
+                    ->update(['status' => AssignmentStatus::Acted, 'acted_at' => $now]);
+            }
+
+            // (6) Open a NEW active step instance for the target
+            $dueAt = $target->sla_seconds !== null
+                ? $now->copy()->addSeconds((int) $target->sla_seconds)
+                : null;
+            $enteringInstance = new WorkflowStepInstance;
+            $enteringInstance->fill([
+                'workflow_instance_id' => $instance->getKey(),
+                'step_id' => $target->getKey(),
+                'status' => StepInstanceStatus::Active,
+                'entered_at' => $now,
+                'due_at' => $dueAt,
+            ]);
+            $enteringInstance->save();
+
+            // (7) Materialize assignments
+            $this->assignmentMaterializer()->materialize($enteringInstance->getKey());
+
+            $instance->current_step_id = $target->getKey();
+            $instance->save();
+
+            // (8) Append history
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $current->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $target->getKey(),
+                'action_code' => 'return',
+                'event' => HistoryEvent::Returned,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['returned_to_step_id' => $target->getKey()],
+            ]);
+
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $enteringInstance->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $target->getKey(),
+                'event' => HistoryEvent::StepEntered,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => null,
+                'metadata' => ['step_type' => $target->type->value, 're_entered' => true],
+            ]);
+
+            return $instance->refresh();
+        });
+    }
+
+    /**
+     * Resolve the target step for a return action.
+     *
+     * Priority:
+     *   1) Explicit `$targetStep` parameter (WorkflowStep instance or step code string)
+     *   2) Most recently completed step instance for this instance
+     *   3) Null (caller will throw ReturnNotAllowedException)
+     */
+    private function resolveReturnTarget(
+        WorkflowInstance $instance,
+        WorkflowStep $currentStep,
+        WorkflowStep|string|null $targetStep,
+    ): ?WorkflowStep {
+        if ($targetStep instanceof WorkflowStep) {
+            return $targetStep;
+        }
+
+        if (is_string($targetStep) && $targetStep !== '') {
+            $found = WorkflowStep::query()
+                ->where('workflow_id', $instance->workflow_id)
+                ->where('code', $targetStep)
+                ->first();
+            if ($found instanceof WorkflowStep) {
+                return $found;
+            }
+        }
+
+        // Default: the most recently completed step instance in this instance
+        $recent = WorkflowStepInstance::query()
+            ->where('workflow_instance_id', $instance->getKey())
+            ->whereIn('status', [
+                StepInstanceStatus::Completed->value,
+                StepInstanceStatus::Skipped->value,
+                StepInstanceStatus::Rejected->value,
+            ])
+            ->where('step_id', '!=', $currentStep->getKey())
+            ->orderByDesc('completed_at')
+            ->orderByDesc('id')
+            ->first();
+
+        if ($recent instanceof WorkflowStepInstance) {
+            $step = $recent->step instanceof WorkflowStep
+                ? $recent->step
+                : WorkflowStep::query()->find($recent->step_id);
+            if ($step instanceof WorkflowStep) {
+                return $step;
+            }
+        }
+
+        return null;
     }
 
     public function hold(
         WorkflowInstance $instance,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance {
         throw InvalidWorkflowException::invalidGraph(
             'WorkflowEngine::hold() will be implemented in US7 (T063-T068).',
@@ -880,7 +1296,7 @@ final class WorkflowEngine implements WorkflowEngineContract
 
     public function resume(
         WorkflowInstance $instance,
-        mixed $actor = null,
+        mixed $user = null,
     ): WorkflowInstance {
         throw InvalidWorkflowException::invalidGraph(
             'WorkflowEngine::resume() will be implemented in US7 (T063-T068).',
@@ -889,8 +1305,8 @@ final class WorkflowEngine implements WorkflowEngineContract
 
     public function cancel(
         WorkflowInstance $instance,
-        ?string $reason = null,
-        mixed $actor = null,
+        mixed $user = null,
+        ?string $comment = null,
     ): WorkflowInstance {
         throw InvalidWorkflowException::invalidGraph(
             'WorkflowEngine::cancel() will be implemented in US7 (T063-T068).',

@@ -98,3 +98,51 @@ if (is_dir(__DIR__.'/../src/Models')) {
         ->toBeFinal()
         ->ignoring(['HFlow\\LaravelWorkflow\\Models\\WorkflowModel']);
 }
+
+// T053 — Append-only invariant: no class in src/Engines/ (other than HistoryRecorder)
+// may call ->update() or ->delete() on a WorkflowHistory instance.
+if (is_dir(__DIR__.'/../src/Engines')) {
+    it('src/Engines/ never calls ->update() or ->delete() on a WorkflowHistory instance (append-only invariant)', function (): void {
+        $enginesDir = realpath(__DIR__.'/../src/Engines');
+        $historyFqcn = 'HFlow\\LaravelWorkflow\\Models\\WorkflowHistory';
+        $recorderFqcn = 'HFlow\\LaravelWorkflow\\Observability\\HistoryRecorder';
+
+        $offenders = [];
+
+        $rii = new \RecursiveIteratorIterator(new \RecursiveDirectoryIterator($enginesDir));
+
+        foreach ($rii as $file) {
+            if (! $file->isFile() || $file->getExtension() !== 'php') {
+                continue;
+            }
+
+            $relative = ltrim(str_replace($enginesDir, '', $file->getPathname()), '/');
+            $source = file_get_contents($file->getPathname());
+            if ($source === false) {
+                continue;
+            }
+
+            // Skip the recorder class itself - it is the one place that
+            // writes to workflow_histories (and only via direct INSERT).
+            if (str_contains($source, 'class HistoryRecorder')
+                || str_contains($source, $recorderFqcn)
+            ) {
+                continue;
+            }
+
+            // Look for ->update( or ->delete( on a variable that could be a
+            // WorkflowHistory. We match any call like $x->update(...) or
+            // ->delete(...) and flag if the file imports or references
+            // WorkflowHistory.
+            if (str_contains($source, $historyFqcn)) {
+                if (preg_match('/->(update|delete)\s*\(/', $source, $matches, PREG_OFFSET_CAPTURE) === 1) {
+                    $line = substr_count(substr($source, 0, $matches[0][1]), "\n") + 1;
+                    $offenders[] = "{$relative}:{$line} ({$matches[0][0]})";
+                }
+            }
+        }
+
+        expect($offenders)
+            ->toBe([], "The following files in src/Engines/ call ->update() or ->delete() on a WorkflowHistory (append-only invariant violation):\n".implode("\n", $offenders));
+    });
+}
