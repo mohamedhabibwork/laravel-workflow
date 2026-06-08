@@ -1710,6 +1710,7 @@ final class WorkflowEngine implements WorkflowEngineContract
                     'step_id' => $step->getKey(),
                     'assignee_type' => (string) $assignee['assignee_type'],
                     'assignee_value' => (string) $assignee['assignee_key'],
+                    'custom_resolver' => $assignee['custom_resolver'] ?? null,
                     'weight' => (int) ($assignee['weight'] ?? 0),
                 ]);
                 $a->save();
