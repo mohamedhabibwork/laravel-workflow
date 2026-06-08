@@ -12,61 +12,31 @@ use HFlow\LaravelWorkflow\Commands\WorkflowDiagnoseCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowHistoryCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowInstanceStatusCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowListCommand;
-use HFlow\LaravelWorkflow\Contracts\CustomActionHandler;
-use HFlow\LaravelWorkflow\Contracts\CustomAuthorizer;
-use HFlow\LaravelWorkflow\Contracts\CustomConditionEvaluator;
-use HFlow\LaravelWorkflow\Contracts\CustomResolver;
-use HFlow\LaravelWorkflow\Contracts\CustomStepHandler;
 use HFlow\LaravelWorkflow\Contracts\TenantScopeProvider;
 use HFlow\LaravelWorkflow\Contracts\WorkflowEngine;
-use HFlow\LaravelWorkflow\Engines\Actions\ActionHandlerResolver;
-use HFlow\LaravelWorkflow\Engines\Actions\DefaultActionHandler;
+use HFlow\LaravelWorkflow\Engines\ActivityFeed;
 use HFlow\LaravelWorkflow\Engines\AssignmentMaterializer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerInterface;
 use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerRegistry;
-use HFlow\LaravelWorkflow\Engines\Authorizers\AuthorizerResolver;
 use HFlow\LaravelWorkflow\Engines\Authorizers\CustomAuthorizerDispatcher;
-use HFlow\LaravelWorkflow\Engines\Authorizers\DefaultAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\PermissionsAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\PublicAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\RolesAuthorizer;
 use HFlow\LaravelWorkflow\Engines\Authorizers\UsersAuthorizer;
-use HFlow\LaravelWorkflow\Engines\Automation\AutomationRunner;
+use HFlow\LaravelWorkflow\Engines\AutomationRunner;
 use HFlow\LaravelWorkflow\Engines\AvailableActionsResolver;
 use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluator;
-use HFlow\LaravelWorkflow\Engines\Conditions\ConditionEvaluatorResolver;
-use HFlow\LaravelWorkflow\Engines\Conditions\DefaultConditionEvaluator;
 use HFlow\LaravelWorkflow\Engines\Conditions\ExpressionConditionEvaluator;
 use HFlow\LaravelWorkflow\Engines\HandlerInvoker;
-use HFlow\LaravelWorkflow\Engines\History\HistoryMaterializer;
-use HFlow\LaravelWorkflow\Engines\History\QuorumEvaluator;
-use HFlow\LaravelWorkflow\Engines\Resolvers\DefaultResolver;
-use HFlow\LaravelWorkflow\Engines\Resolvers\ResolverRegistry;
-use HFlow\LaravelWorkflow\Engines\Steps\DefaultStepHandler;
-use HFlow\LaravelWorkflow\Engines\Steps\StepHandlerResolver;
+use HFlow\LaravelWorkflow\Engines\QuorumEvaluator;
 use HFlow\LaravelWorkflow\Engines\TransitionResolver;
 use HFlow\LaravelWorkflow\Engines\WorkflowEngine as WorkflowEngineImpl;
-use HFlow\LaravelWorkflow\Events\ActionPerformed;
-use HFlow\LaravelWorkflow\Events\AssignmentCompleted;
-use HFlow\LaravelWorkflow\Events\AssignmentCreated;
-use HFlow\LaravelWorkflow\Events\AssignmentExpired;
-use HFlow\LaravelWorkflow\Events\InstanceCancelled;
-use HFlow\LaravelWorkflow\Events\InstanceCompleted;
-use HFlow\LaravelWorkflow\Events\InstanceFailed;
-use HFlow\LaravelWorkflow\Events\InstanceHeld;
-use HFlow\LaravelWorkflow\Events\InstanceResumed;
-use HFlow\LaravelWorkflow\Events\InstanceStarted;
-use HFlow\LaravelWorkflow\Events\StepCompleted;
-use HFlow\LaravelWorkflow\Events\StepReturned;
-use HFlow\LaravelWorkflow\Events\StepSkipped;
-use HFlow\LaravelWorkflow\Events\StepStarted;
-use HFlow\LaravelWorkflow\Listeners\RecordHistory;
-use HFlow\LaravelWorkflow\Observability\ActivityFeed;
+use HFlow\LaravelWorkflow\Models\WorkflowHistory;
 use HFlow\LaravelWorkflow\Observability\HistoryRecorder;
 use Illuminate\Contracts\Events\Dispatcher;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Arr;
 use Illuminate\Support\Facades\Event;
-use InvalidArgumentException;
 use Spatie\LaravelPackageTools\Package;
 use Spatie\LaravelPackageTools\PackageServiceProvider;
 
@@ -151,7 +121,7 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
     protected function registerCoreResolvers(): void
     {
         $authorizerContract = AuthorizerInterface::class;
-        if (! $this->app->bound($authorizerContract) && class_exists($authorizerContract)) {
+        if (! $this->app->bound($authorizerContract) && interface_exists($authorizerContract)) {
             $configured = config('workflow.core.default_authorizer');
             $default = is_string($configured) && class_exists($configured)
                 ? $configured
@@ -192,75 +162,11 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
      */
     protected function registerHostContracts(): void
     {
-        $this->bindContract(
-            CustomAuthorizer::class,
-            'workflow.custom_contracts.authorizer',
-            DefaultAuthorizer::class,
-        );
-
-        $this->bindContract(
-            CustomConditionEvaluator::class,
-            'workflow.custom_contracts.condition_evaluator',
-            DefaultConditionEvaluator::class,
-        );
-
-        $this->bindContract(
-            CustomActionHandler::class,
-            'workflow.custom_contracts.action_handler',
-            DefaultActionHandler::class,
-        );
-
-        $this->bindContract(
-            CustomStepHandler::class,
-            'workflow.custom_contracts.step_handler',
-            DefaultStepHandler::class,
-        );
-
-        $this->bindContract(
-            CustomResolver::class,
-            'workflow.custom_contracts.resolver',
-            DefaultResolver::class,
-        );
-
         // TenantScopeProvider is OPTIONAL — only bind if config provides a FQCN
         $tenantProvider = config('workflow.tenancy.scope_provider');
         if (is_string($tenantProvider) && $tenantProvider !== '') {
             $this->app->singleton(TenantScopeProvider::class, $tenantProvider);
         }
-    }
-
-    /**
-     * Bind a host contract to either a configured FQCN or a default implementation.
-     */
-    protected function bindContract(string $contract, string $configKey, string $defaultImpl): void
-    {
-        $configured = config($configKey);
-        $binding = (is_string($configured) && $configured !== '') ? $configured : $defaultImpl;
-
-        // Defensive: only bind the contract impl if it actually exists on disk.
-        // During incremental bring-up, default impls may not exist yet.
-        if (! class_exists($binding)) {
-            return;
-        }
-
-        $this->app->singleton($contract, $binding);
-
-        // Register the resolver wrapper that delegates to the bound contract
-        $resolverClass = match ($contract) {
-            CustomAuthorizer::class => AuthorizerResolver::class,
-            CustomConditionEvaluator::class => ConditionEvaluatorResolver::class,
-            CustomActionHandler::class => ActionHandlerResolver::class,
-            CustomStepHandler::class => StepHandlerResolver::class,
-            CustomResolver::class => ResolverRegistry::class,
-            default => throw new InvalidArgumentException("Unknown host contract: {$contract}"),
-        };
-
-        // Skip the resolver binding if the resolver class doesn't exist yet.
-        if (! class_exists($resolverClass)) {
-            return;
-        }
-
-        $this->app->singleton($resolverClass, fn ($app) => new $resolverClass($app->make($contract)));
     }
 
     /**
@@ -277,14 +183,16 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
                 return null;
             }
 
-            $hasFullDeps = class_exists(AuthorizerResolver::class)
-                && class_exists(ConditionEvaluatorResolver::class)
-                && class_exists(ActionHandlerResolver::class)
-                && class_exists(StepHandlerResolver::class)
-                && class_exists(ResolverRegistry::class)
+            $hasFullDeps = class_exists(AvailableActionsResolver::class)
+                && class_exists(TransitionResolver::class)
+                && class_exists(QuorumEvaluator::class)
+                && class_exists(AssignmentMaterializer::class)
+                && class_exists(HandlerInvoker::class)
                 && class_exists(HistoryRecorder::class)
-                && class_exists(HistoryMaterializer::class)
-                && class_exists(QuorumEvaluator::class);
+                && class_exists(AuthorizerRegistry::class)
+                && class_exists(ConditionEvaluator::class)
+                && class_exists(AutomationRunner::class)
+                && class_exists(ActivityFeed::class);
 
             if (! $hasFullDeps) {
                 return new WorkflowEngineImpl;
@@ -292,36 +200,20 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
 
             return new WorkflowEngineImpl(
                 historyRecorder: $app->make(HistoryRecorder::class),
-                actionsResolver: class_exists(AvailableActionsResolver::class)
-                    ? new AvailableActionsResolver(
-                        $app->make(AuthorizerInterface::class),
-                        $app->make(ConditionEvaluator::class),
-                    )
-                    : null,
-                transitionResolver: class_exists(TransitionResolver::class)
-                    ? $app->make(TransitionResolver::class)
-                    : null,
-                quorumEvaluator: class_exists(Engines\QuorumEvaluator::class)
-                    ? $app->make(Engines\QuorumEvaluator::class)
-                    : null,
-                assignmentMaterializer: class_exists(AssignmentMaterializer::class)
-                    ? $app->make(AssignmentMaterializer::class)
-                    : null,
-                handlerInvoker: class_exists(HandlerInvoker::class)
-                    ? $app->make(HandlerInvoker::class)
-                    : null,
+                actionsResolver: new AvailableActionsResolver(
+                    $app->make(AuthorizerRegistry::class),
+                    $app->make(ConditionEvaluator::class),
+                ),
+                transitionResolver: $app->make(TransitionResolver::class),
+                quorumEvaluator: $app->make(QuorumEvaluator::class),
+                assignmentMaterializer: $app->make(AssignmentMaterializer::class),
+                handlerInvoker: $app->make(HandlerInvoker::class),
+                conditionEvaluator: $app->make(ConditionEvaluator::class),
+                automationRunner: $app->make(AutomationRunner::class),
+                activityFeed: $app->make(ActivityFeed::class),
             );
         });
 
-        // Backward-compat alias: \HFlow\LaravelWorkflow\LaravelWorkflow resolves to the engine
-        $this->app->singleton(LaravelWorkflow::class, function ($app): ?LaravelWorkflow {
-            $engine = $app->make(WorkflowEngine::class);
-            if ($engine === null) {
-                return null;
-            }
-
-            return new LaravelWorkflow($engine);
-        });
     }
 
     /**
@@ -347,8 +239,9 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
     protected function registerAutomationServices(): void
     {
         $this->app->singleton(AutomationRunner::class, fn ($app) => new AutomationRunner(
-            maxRetries: (int) config('workflow.automation.max_retry_attempts', 3),
-            backoffSeconds: (array) config('workflow.automation.retry_backoff_seconds', [10, 60, 300]),
+            recorder: $app->make(HistoryRecorder::class),
+            handlerInvoker: $app->make(HandlerInvoker::class),
+            transitionResolver: $app->make(TransitionResolver::class),
         ));
     }
 
@@ -377,28 +270,13 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
             return;
         }
 
-        if (! class_exists(RecordHistory::class)) {
+        if (! class_exists(WorkflowHistory::class)) {
             return;
         }
 
-        $listener = app(RecordHistory::class);
+        $listener = app(WorkflowHistory::class);
 
-        $events = [
-            InstanceStarted::class,
-            InstanceCompleted::class,
-            InstanceCancelled::class,
-            InstanceFailed::class,
-            InstanceHeld::class,
-            InstanceResumed::class,
-            StepStarted::class,
-            StepCompleted::class,
-            StepSkipped::class,
-            StepReturned::class,
-            ActionPerformed::class,
-            AssignmentCreated::class,
-            AssignmentCompleted::class,
-            AssignmentExpired::class,
-        ];
+        $events = Arr::wrap(config('workflow.events.records') ?? []);
 
         foreach ($events as $eventClass) {
             if (! class_exists($eventClass)) {

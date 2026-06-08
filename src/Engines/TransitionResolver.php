@@ -74,7 +74,7 @@ final class TransitionResolver
         }
 
         throw new TransitionNotFoundException(
-            "No transition out of step [{$currentStep->code}] for action [".($action?->code ?? 'auto').']',
+            "No transition out of step [{$currentStep->code}] for action [".($action ? $action->code : 'auto').']',
         );
     }
 

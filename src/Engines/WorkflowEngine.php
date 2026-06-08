@@ -28,6 +28,7 @@ use HFlow\LaravelWorkflow\Enums\TransitionType;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
 use HFlow\LaravelWorkflow\Enums\WorkflowType;
 use HFlow\LaravelWorkflow\Exceptions\ActionNotAvailableException;
+use HFlow\LaravelWorkflow\Exceptions\AutomationLoopGuardException;
 use HFlow\LaravelWorkflow\Exceptions\CommentRequiredException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidStateException;
 use HFlow\LaravelWorkflow\Exceptions\InvalidWorkflowException;
@@ -74,7 +75,7 @@ use Throwable;
  *                                      handler invocation, quorum, transition,
  *                                      step enter/exit, history append).
  *
- * Phase 6+ (US4-US7) stub for: skipStep, returnToStep, hold, resume, cancel, history.
+ * Phase 6+ (US4-US7) implements: skip, return, hold, resume, cancel, history.
  *
  * @phpstan-type StepDefinition array{
  *     key: string,
@@ -238,13 +239,13 @@ final class WorkflowEngine implements WorkflowEngineContract
         $context = (array) ($instance->context ?? []);
 
         return [
-            'subject' => $instance->subject,
+            'subject' => $instance->workflowable,
             'context' => $context,
             'user' => $user,
             'instance' => [
                 'id' => $instance->getKey(),
                 'uuid' => $instance->uuid,
-                'status' => $instance->status?->value,
+                'status' => $instance->status->value,
                 'workflow_id' => $instance->workflow_id,
                 'workflow_version' => (int) $instance->workflow_version,
                 'current_step_id' => $instance->current_step_id,
@@ -510,7 +511,7 @@ final class WorkflowEngine implements WorkflowEngineContract
     }
 
     // -------------------------------------------------------------------
-    //  US4 / US6 / US7 — Stubs (filled in by later phases)
+    //  US2 / US4 / US6 / US7 — Runtime: start / currentStep / skip / return / control
     // -------------------------------------------------------------------
 
     /**
@@ -759,7 +760,7 @@ final class WorkflowEngine implements WorkflowEngineContract
      * @throws NotEligibleException
      * @throws ActionNotAvailableException
      * @throws CommentRequiredException
-     * @throws TransitionNotFoundExceptio
+     * @throws TransitionNotFoundException
      */
     public function perform(
         WorkflowInstance $instance,
@@ -780,7 +781,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         if (! $current instanceof WorkflowStepInstance) {
             throw InvalidStateException::forStepInstance(
                 StepInstanceStatus::Active->value,
-                $current->status ?? StepInstanceStatus::Active,
+                'unknown',
             );
         }
 
@@ -1062,7 +1063,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         if (! $current instanceof WorkflowStepInstance) {
             throw InvalidStateException::forStepInstance(
                 StepInstanceStatus::Active->value,
-                $current->status ?? StepInstanceStatus::Active,
+                'unknown',
             );
         }
 
@@ -1254,7 +1255,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         if (! $current instanceof WorkflowStepInstance) {
             throw InvalidStateException::forStepInstance(
                 StepInstanceStatus::Active->value,
-                $current->status ?? StepInstanceStatus::Active,
+                'unknown',
             );
         }
 
@@ -1731,7 +1732,7 @@ final class WorkflowEngine implements WorkflowEngineContract
                         $action['availability_mode'] ?? null,
                         ActionAvailabilityMode::General,
                     ),
-                    'target_step_id' => isset($action['next_step_key']) && $action['next_step_key'] !== null
+                    'target_step_id' => isset($action['next_step_key'])
                         ? ($stepIds[(string) $action['next_step_key']] ?? null)
                         : null,
                     'requires_comment' => (bool) ($action['requires_comment'] ?? false),

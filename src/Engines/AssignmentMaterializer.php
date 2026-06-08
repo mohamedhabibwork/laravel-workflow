@@ -41,8 +41,8 @@ final class AssignmentMaterializer
         $rows = $stepInstance->step->assignees;
 
         $created = [];
+        /** @var WorkflowStepAssignee $row */
         foreach ($rows as $row) {
-            /** @var WorkflowStepAssignee $row */
             foreach ($this->resolveAssigneeIds($row) as $assigneeId) {
                 $assignment = new WorkflowAssignment;
                 $assignment->fill([

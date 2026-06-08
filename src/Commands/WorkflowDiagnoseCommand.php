@@ -4,7 +4,6 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Commands;
 
-use HFlow\LaravelWorkflow\Engines\Actions\DefaultActionHandler;
 use HFlow\LaravelWorkflow\Enums\StepType;
 use HFlow\LaravelWorkflow\Models\Workflow;
 use HFlow\LaravelWorkflow\QueryBuilder\TenantScope;
@@ -129,10 +128,6 @@ final class WorkflowDiagnoseCommand extends Command
         }
 
         // 3. Actions without handlers
-        $knownStockHandlers = [
-            DefaultActionHandler::class,
-        ];
-
         foreach ($steps as $step) {
             $actions = $step->actions()->get();
             if ($actions->isEmpty()) {
@@ -140,11 +135,10 @@ final class WorkflowDiagnoseCommand extends Command
             }
             foreach ($actions as $action) {
                 $handler = (string) ($action->handler ?? '');
-                $hasHandler = $handler !== ''
-                    && (class_exists($handler) || in_array($handler, $knownStockHandlers, true));
+                $hasHandler = $handler !== '' && class_exists($handler);
 
-                if (! $hasHandler && $step->custom_action_handler === null) {
-                    $issues[] = "Step [{$step->code}] action [{$action->code}] has no handler (no FQCN, no stock handler, no custom_action_handler on the step).";
+                if (! $hasHandler) {
+                    $issues[] = "Step [{$step->code}] action [{$action->code}] has no handler (no valid FQCN).";
                 }
             }
         }

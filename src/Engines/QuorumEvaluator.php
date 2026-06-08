@@ -41,7 +41,6 @@ final class QuorumEvaluator
         return match ($mode) {
             MatchMode::Any => $acted >= 1,
             MatchMode::All => $pending === 0 && $acted >= 1,
-            default => $acted >= 1,
         };
     }
 

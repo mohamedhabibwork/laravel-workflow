@@ -52,7 +52,7 @@ final class WorkflowHistoryCommand extends Command
             ['#', 'When', 'Event', 'Action', 'From Step', 'To Step', 'Actor', 'Comment'],
             $rows->map(fn ($h, $i): array => [
                 (string) ($i + 1),
-                $h->performed_at?->toIso8601String() ?? '-',
+                $h->performed_at->toIso8601String(),
                 $h->event->value,
                 (string) ($h->action_code ?? '-'),
                 (string) ($h->from_step_id ?? '-'),

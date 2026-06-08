@@ -30,6 +30,11 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final class ActivityFeed
 {
+    public function __construct(
+        private readonly int $defaultPerPage = 25,
+        private readonly int $maxPerPage = 100,
+    ) {}
+
     /**
      * Read the activity feed for an instance.
      *

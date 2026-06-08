@@ -51,12 +51,12 @@ final class WorkflowInstanceStatusCommand extends Command
         ));
         $this->line(sprintf(
             '  <info>Workflow</info>     %s (v%d)',
-            $instance->workflow?->code ?? '-',
+            $instance->workflow->code,
             $instance->workflow_version,
         ));
         $this->line(sprintf('  <info>Status</info>       %s', $instance->status->value));
-        $this->line(sprintf('  <info>Current Step</info> %s', $instance->currentStep()?->step?->name ?? '-'));
-        $this->line(sprintf('  <info>Started</info>      %s', $instance->started_at?->toIso8601String() ?? '-'));
+        $this->line(sprintf('  <info>Current Step</info> %s', $instance->currentStep->name ?? '-'));
+        $this->line(sprintf('  <info>Started</info>      %s', $instance->started_at->toIso8601String()));
         $this->line(sprintf('  <info>Completed</info>    %s', $instance->completed_at?->toIso8601String() ?? '-'));
         $this->newLine();
 
@@ -72,7 +72,7 @@ final class WorkflowInstanceStatusCommand extends Command
         $this->table(
             ['When', 'Event', 'Action', 'Actor', 'Comment'],
             $history->map(fn ($h): array => [
-                $h->performed_at?->toIso8601String() ?? '-',
+                $h->performed_at->toIso8601String(),
                 $h->event->value,
                 (string) ($h->action_code ?? '-'),
                 (string) ($h->actor_id ?? 'system'),

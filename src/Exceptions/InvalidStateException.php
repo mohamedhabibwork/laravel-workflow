@@ -9,14 +9,18 @@ use HFlow\LaravelWorkflow\Enums\StepInstanceStatus;
 
 final class InvalidStateException extends WorkflowException
 {
-    public static function forInstance(string $expected, InstanceStatus $actual): self
+    public static function forInstance(string $expected, InstanceStatus|string $actual): self
     {
-        return new self("Instance must be in [{$expected}] state, currently [{$actual->value}].");
+        $actualValue = $actual instanceof InstanceStatus ? $actual->value : $actual;
+
+        return new self("Instance must be in [{$expected}] state, currently [{$actualValue}].");
     }
 
-    public static function forStepInstance(string $expected, StepInstanceStatus $actual): self
+    public static function forStepInstance(string $expected, StepInstanceStatus|string $actual): self
     {
-        return new self("Step instance must be in [{$expected}] state, currently [{$actual->value}].");
+        $actualValue = $actual instanceof StepInstanceStatus ? $actual->value : $actual;
+
+        return new self("Step instance must be in [{$expected}] state, currently [{$actualValue}].");
     }
 
     public static function forWorkflow(string $expected, string $actual): self

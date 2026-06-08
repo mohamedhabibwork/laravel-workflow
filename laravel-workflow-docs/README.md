@@ -1,39 +1,40 @@
-# Laravel Workflow Engine — Documentation Suite
+# Laravel Workflow Documentation
 
-A reusable, generic workflow engine package for Laravel. One model serves three workflow families:
+This directory is the user-facing documentation for `mohamedhabibwork/laravel-workflow`.
 
-- **`automation`** — system-driven pipelines (steps auto-execute and chain).
-- **`approval`** — human-driven approval flows (steps wait for an authorized actor).
-- **`generic`** — free-form state machines mixing manual and automated steps.
+Laravel Workflow is a reusable package for versioned workflow definitions, runtime workflow instances, deterministic user actions, synchronous automation, optional tenancy, and append-only history. A workflow can be attached to any Eloquent model through the host application.
 
-## Documents
+## Start Here
 
-| File | Contents |
+| Page | Use it for |
 |---|---|
-| [`BRD.md`](./BRD.md) | Business requirements & rules only — no code. |
-| [`ERD.md`](./ERD.md) | Entities, columns, types, keys, relationships + Mermaid ER diagram. |
-| [`STATE_MACHINES.md`](./STATE_MACHINES.md) | Complete lifecycle for every status field + enumerated value reference. |
+| [Installation](./01-installation.md) | Installing, publishing config/migrations, and running the first smoke test. |
+| [Configuration](./02-configuration.md) | Every config key in `config/workflow.php`, including tenancy and automation. |
+| [Core Concepts](./03-core-concepts.md) | Workflows, versions, steps, actions, transitions, instances, assignments, and history. |
+| [Defining Workflows](./04-defining-workflows.md) | Defining workflows with arrays/Eloquent rows and activating versions. |
+| [Workflow Engine API](./05-engine-api.md) | The public `WorkflowEngine` methods and their expected effects. |
+| [PHP Attributes](./06-php-attributes.md) | Authoring workflows with native PHP attributes and compiling them to rows. |
+| [Authorization And Conditions](./07-authorization-and-conditions.md) | Eligibility, assignees, expression conditions, and custom contracts. |
+| [Automation](./08-automation.md) | Automated steps, retries, failures, and chain-depth protection. |
+| [History And Activity](./09-history-activity.md) | Append-only history rows, events, activity feed reads, and audit payloads. |
+| [Tenancy](./10-tenancy.md) | Tenant scoping, tenant-aware uniqueness, and resolver behavior. |
+| [Artisan Commands](./11-artisan-commands.md) | Built-in workflow inspection and attribute compile commands. |
+| [Testing And Operations](./12-testing-operations.md) | Pest, PHPStan, Pint, CI, and operational checks for host apps. |
+| [Troubleshooting](./13-troubleshooting.md) | Common setup, activation, routing, authorization, compile, and tenancy issues. |
 
-## Capabilities at a glance
+## Reference
 
-- Attach a workflow to **any** host model (polymorphic `workflowable` subject).
-- Per-step authorization: **public / roles / permissions / specific users / custom logic**.
-- **Available-actions resolution** per user — general or custom guard (deterministic, server-validated).
-- **Get current step**, **skip**, and **return** steps gated by conditions (general expression or custom evaluator).
-- Reusable **conditions** (expression / custom / composite) driving transitions, action availability, skip & return.
-- **Activities & history** — append-only immutable audit trail; the activity feed is derived from it.
-- Workflow **versioning** — live instances keep running on the version they started with.
-- Optional **multi-tenancy** hook (`tenant_id`, host-driven scope).
+| Page | Use it for |
+|---|---|
+| [BRD](./BRD.md) | Business requirements, guarantees, and non-goals. |
+| [ERD](./ERD.md) | Table map, relationships, and schema notes. |
+| [State Machines](./STATE_MACHINES.md) | All status values and valid transitions. |
 
-## Design constraints honored
+## Design Constraints
 
-- **No `lookup_types` / `lookups` tables and no database `ENUM`** — all type/status fields are `VARCHAR` backed by PHP enums/constants (see the value reference in `STATE_MACHINES.md`).
-- Schema conventions: `BIGINT` PK, `UUID` UK, `TIMESTAMPTZ` timestamps, soft delete (`is_deleted` + `deleted_at`), full audit columns (`created_by` / `updated_by` / `deleted_by`).
-- Package-aware: user FKs are nullable `BIGINT` → host `users.id`; table prefix is configurable (`workflow_` default).
-- BRD contains no code; ERD is a separate file.
-
-## Table map
-
-**Definitions (design-time):** `workflows`, `workflow_steps`, `workflow_step_assignees`, `workflow_step_actions`, `workflow_conditions`, `workflow_transitions`.
-
-**Runtime (execution-time):** `workflow_instances`, `workflow_step_instances`, `workflow_assignments`, `workflow_histories` *(append-only)*.
+- The package does not own the host `users` table.
+- Type and status columns are strings cast to PHP enums; there are no lookup tables and no database `ENUM` columns.
+- Workflow instances pin the workflow version they started on.
+- Every state-changing operation writes append-only history.
+- Action availability and user eligibility are re-checked on every `perform()` call.
+- Tenancy is optional and supplied by the host through `TenantScopeProvider`.

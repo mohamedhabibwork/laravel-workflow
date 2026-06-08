@@ -214,15 +214,16 @@ vendor/bin/pint --test
 
 The suite uses Pest, Pest Arch, Orchestra Testbench, Larastan, and Laravel Pint. The CI matrix is defined in `.github/workflows/tests.yml`, with lint/static-analysis checks in `.github/workflows/lint.yml`.
 
-## Reference
+## Documentation
 
-Feature-level reference lives under `specs/002-laravel-workflow-engine/`:
+Full package documentation lives in [`laravel-workflow-docs/`](./laravel-workflow-docs/README.md):
 
-- `quickstart.md`: end-to-end walkthrough.
-- `contracts/workflow-engine.md`: public engine contract.
-- `contracts/host-contracts.md`: host extension contracts.
-- `contracts/attributes.md`: PHP attribute authoring contract.
-- `data-model.md`: tables, enums, relationships, and state machines.
+- [Installation](./laravel-workflow-docs/01-installation.md)
+- [Configuration](./laravel-workflow-docs/02-configuration.md)
+- [Workflow Engine API](./laravel-workflow-docs/05-engine-api.md)
+- [PHP Attributes](./laravel-workflow-docs/06-php-attributes.md)
+- [Artisan Commands](./laravel-workflow-docs/11-artisan-commands.md)
+- [Troubleshooting](./laravel-workflow-docs/13-troubleshooting.md)
 
 ## License
 
