@@ -84,6 +84,7 @@ class TestCase extends Orchestra
             'workflow.history.on_dispatch_failure' => 'skip',
             'workflow.automation.max_retry_attempts' => 3,
             'workflow.automation.retry_backoff_seconds' => [10, 60, 300],
+            'workflow.automation.max_chain_depth' => 50,
         ];
 
         foreach ($config as $key => $value) {

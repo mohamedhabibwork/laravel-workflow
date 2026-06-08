@@ -122,6 +122,8 @@ final class WorkflowEngine implements WorkflowEngineContract
      * @param  AssignmentMaterializer|null  $assignmentMaterializer  Optional: when present, used by {@see self::perform()}.
      * @param  HandlerInvoker|null  $handlerInvoker  Optional: when present, used by {@see self::perform()}.
      * @param  ConditionEvaluator|null  $conditionEvaluator  Optional: when present, used by skip/return guards.
+     * @param  AutomationRunner|null  $automationRunner  Optional: when present, used by US5 (start/perform/retry on
+     *                                                   automated steps).
      */
     public function __construct(
         private readonly ?HistoryRecorder $historyRecorder = null,
@@ -131,6 +133,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         private readonly ?AssignmentMaterializer $assignmentMaterializer = null,
         private readonly ?HandlerInvoker $handlerInvoker = null,
         private readonly ?ConditionEvaluator $conditionEvaluator = null,
+        private readonly ?AutomationRunner $automationRunner = null,
     ) {}
 
     /**
@@ -199,6 +202,19 @@ final class WorkflowEngine implements WorkflowEngineContract
         }
 
         return new ConditionEvaluator(new ExpressionConditionEvaluator);
+    }
+
+    private function automationRunner(): AutomationRunner
+    {
+        if ($this->automationRunner instanceof AutomationRunner) {
+            return $this->automationRunner;
+        }
+
+        return new AutomationRunner(
+            $this->recorder(),
+            $this->handlerInvoker(),
+            $this->transitionResolver(),
+        );
     }
 
     /**
@@ -518,15 +534,16 @@ final class WorkflowEngine implements WorkflowEngineContract
             }
         }
 
-        return DB::transaction(function () use ($model, $subject, $context, $initiator): WorkflowInstance {
-            $now = Carbon::now();
+        $startStep = $model->steps()->where('type', StepType::Start->value)->first();
+        if (! $startStep instanceof WorkflowStep) {
+            throw InvalidWorkflowException::invalidGraph(
+                "Workflow [{$model->code}] has no start step.",
+            );
+        }
+        $startStepType = $startStep->type;
 
-            $startStep = $model->steps()->where('type', StepType::Start->value)->first();
-            if (! $startStep instanceof WorkflowStep) {
-                throw InvalidWorkflowException::invalidGraph(
-                    "Workflow [{$model->code}] has no start step.",
-                );
-            }
+        $instance = DB::transaction(function () use ($model, $subject, $context, $initiator, $startStep): WorkflowInstance {
+            $now = Carbon::now();
 
             $actorId = $initiator !== null && is_object($initiator) && method_exists($initiator, 'getKey')
                 ? (int) $initiator->getKey()
@@ -577,6 +594,80 @@ final class WorkflowEngine implements WorkflowEngineContract
 
             return $instance->refresh();
         });
+
+        // After the outer transaction commits, drive the chain forward when
+        // the entering step is non-human-gated (US5, T058). The runner
+        // treats `Start` steps as a structural passthrough when the next
+        // step is automated, and chains automated steps until a human-
+        // gated step, an `end` step, or a failure. The runner opens its
+        // own nested savepoint so a guard/transition failure rolls back
+        // cleanly.
+        //
+        // A `Start` step with `actions` defined is treated as a user-
+        // actionable entry point (the user performs the action to advance);
+        // the runner is skipped so the start step stays active. A `Start`
+        // step whose transition target is `end` (or a human-gated step)
+        // is a degenerate single-step workflow and the start step stays
+        // active too.
+        $runnerIsNeeded = $this->isRunnerNeededForStartStep($startStep);
+
+        if ($runnerIsNeeded) {
+            $stepInstance = WorkflowStepInstance::query()
+                ->where('workflow_instance_id', $instance->getKey())
+                ->where('status', StepInstanceStatus::Active->value)
+                ->orderByDesc('id')
+                ->first();
+            if ($stepInstance instanceof WorkflowStepInstance) {
+                $this->automationRunner()->run($instance->refresh(), $stepInstance);
+            }
+        }
+
+        return $instance->refresh();
+    }
+
+    /**
+     * Decide whether the AutomationRunner should drive the chain after
+     * `start()`. The runner is needed when the entering step is automated
+     * OR when the start step is a structural marker leading to an
+     * automated step. In all other cases (human-gated entry, actions on
+     * the start step, or the start step's only transition goes to a non-
+     * automated step), the start step stays active and waits for a user
+     * action.
+     */
+    private function isRunnerNeededForStartStep(WorkflowStep $startStep): bool
+    {
+        if ($startStep->type === StepType::Automated) {
+            return true;
+        }
+
+        if ($startStep->type !== StepType::Start) {
+            return false;
+        }
+
+        // A start step with actions is a user-actionable entry point.
+        if ($startStep->actions->isNotEmpty()) {
+            return false;
+        }
+
+        // Find the next step (excluding the implicit `__start__` self-loop
+        // that the engine may create when the user defines
+        // `['from' => '__start__', 'to' => 'start']`).
+        $transitions = WorkflowTransition::query()
+            ->where('workflow_id', $startStep->workflow_id)
+            ->where('from_step_id', $startStep->getKey())
+            ->where('to_step_id', '!=', $startStep->getKey())
+            ->get();
+
+        if ($transitions->isEmpty()) {
+            return false;
+        }
+
+        $nextStep = $this->transitionResolver()->resolveNextStep($startStep, null, $transitions);
+
+        // Only auto-advance past the start step if the next step is
+        // automated. Anything else (end, task, approval, gateway) means
+        // the start step is the user's entry point.
+        return $nextStep->type === StepType::Automated;
     }
 
     public function currentStep(WorkflowInstance $instance): WorkflowStepInstance|Collection
@@ -711,9 +802,14 @@ final class WorkflowEngine implements WorkflowEngineContract
         $actorType = $actorId !== null ? ActorType::User : ActorType::System;
         $now = Carbon::now();
 
-        return DB::transaction(function () use (
+        // Captured by reference so the after-commit block can chain automation
+        // (US5, T058) without reopening the transaction.
+        $enteringInstanceRef = null;
+
+        $instance = DB::transaction(function () use (
             $instance, $current, $step, $resolved, $actionCode,
             $payload, $comment, $actorId, $actorType, $now,
+            &$enteringInstanceRef,
         ): WorkflowInstance {
             // (5) Close the leaving step instance
             $leavingTerminal = $this->terminalStatusForAction($resolved->type);
@@ -785,6 +881,10 @@ final class WorkflowEngine implements WorkflowEngineContract
 
                 // (10) Materialize assignments for task/approval steps
                 $this->assignmentMaterializer()->materialize($enteringInstance->getKey());
+
+                // Hand the entering step instance to the outer scope so the
+                // post-commit automation kick-off (T058) can drive it.
+                $enteringInstanceRef = $enteringInstance;
             }
 
             // (11) Append history
@@ -855,6 +955,21 @@ final class WorkflowEngine implements WorkflowEngineContract
 
             return $instance->refresh();
         });
+
+        // After the outer transaction commits: if the entering step is
+        // automated, drive the chain forward (US5, T058). The runner opens
+        // its own nested savepoint so a guard/transition failure rolls back
+        // cleanly without affecting the action we just performed.
+        if ($enteringInstanceRef instanceof WorkflowStepInstance) {
+            $enteringStep = $enteringInstanceRef->step instanceof WorkflowStep
+                ? $enteringInstanceRef->step
+                : WorkflowStep::query()->find($enteringInstanceRef->step_id);
+            if ($enteringStep instanceof WorkflowStep && $enteringStep->type === StepType::Automated) {
+                $this->automationRunner()->run($instance->refresh(), $enteringInstanceRef);
+            }
+        }
+
+        return $instance->refresh();
     }
 
     /**
@@ -1284,6 +1399,111 @@ final class WorkflowEngine implements WorkflowEngineContract
         }
 
         return null;
+    }
+
+    /**
+     * Re-enter the most recently failed step as a fresh step instance and
+     * resume the automation chain (US5, T057).
+     *
+     *   1) Reject non-`failed` instance (InvalidStateException).
+     *   2) Find the most recent `failed` step instance.
+     *   3) Open a NEW active step instance for that same step.
+     *   4) Set the instance back to `in_progress`, clear `completed_at`.
+     *   5) Append `step_entered` history.
+     *   6) If the re-entered step is `automated`, drive the chain
+     *      forward via {@see AutomationRunner} AFTER the transaction
+     *      commits (so a deep chain does not race with the open tx).
+     *
+     * @throws InvalidStateException when the instance is not in `failed`
+     * @throws AutomationLoopGuardException when the resumed chain exceeds
+     *                                      `config('workflow.automation.max_chain_depth')`
+     */
+    public function retry(
+        WorkflowInstance $instance,
+        mixed $user = null,
+        ?string $comment = null,
+    ): WorkflowInstance {
+        $instance = $instance->fresh(['stepInstances.step']);
+
+        if ($instance->status !== InstanceStatus::Failed) {
+            throw InvalidStateException::forInstance(
+                expected: InstanceStatus::Failed->value,
+                actual: $instance->status,
+            );
+        }
+
+        $failedStepInstance = WorkflowStepInstance::query()
+            ->where('workflow_instance_id', $instance->getKey())
+            ->where('status', StepInstanceStatus::Failed->value)
+            ->orderByDesc('id')
+            ->first();
+
+        if (! $failedStepInstance instanceof WorkflowStepInstance) {
+            throw InvalidStateException::forInstance(
+                expected: 'a failed step instance',
+                actual: 'no failed step instance found',
+            );
+        }
+
+        $step = $failedStepInstance->step instanceof WorkflowStep
+            ? $failedStepInstance->step
+            : WorkflowStep::query()->findOrFail($failedStepInstance->step_id);
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        $newStepInstance = DB::transaction(function () use (
+            $instance, $step, $comment, $actorId, $actorType, $now,
+        ): WorkflowStepInstance {
+            // (3) Open a NEW active step instance for the failed step.
+            $dueAt = $step->sla_seconds !== null
+                ? $now->copy()->addSeconds((int) $step->sla_seconds)
+                : null;
+
+            $newStepInstance = new WorkflowStepInstance;
+            $newStepInstance->fill([
+                'workflow_instance_id' => $instance->getKey(),
+                'step_id' => $step->getKey(),
+                'status' => StepInstanceStatus::Active,
+                'entered_at' => $now,
+                'due_at' => $dueAt,
+            ]);
+            $newStepInstance->save();
+
+            // (4) Set the instance back to in_progress, clear completion.
+            $instance->status = InstanceStatus::InProgress;
+            $instance->current_step_id = $step->getKey();
+            $instance->completed_at = null;
+            $instance->save();
+
+            // (5) Append `step_entered` history (prior rows are preserved).
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'step_instance_id' => $newStepInstance->getKey(),
+                'from_step_id' => $step->getKey(),
+                'to_step_id' => $step->getKey(),
+                'event' => HistoryEvent::StepEntered,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['step_type' => $step->type->value, 'retry' => true],
+            ]);
+
+            return $newStepInstance;
+        });
+
+        // (6) After commit: if the re-entered step is automated, drive the
+        // chain forward so the retry continues until a human-gated step, an
+        // `end` step, or a second failure.
+        if ($step->type === StepType::Automated) {
+            $this->automationRunner()->run($instance->refresh(), $newStepInstance);
+        }
+
+        return $instance->refresh();
     }
 
     public function hold(

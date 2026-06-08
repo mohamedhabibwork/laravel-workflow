@@ -5,6 +5,8 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Contracts;
 
 use HFlow\LaravelWorkflow\Actions\ActionSet;
+use HFlow\LaravelWorkflow\Exceptions\AutomationLoopGuardException;
+use HFlow\LaravelWorkflow\Exceptions\InvalidStateException;
 use HFlow\LaravelWorkflow\Exceptions\ReturnNotAllowedException;
 use HFlow\LaravelWorkflow\Exceptions\SkipNotAllowedException;
 use HFlow\LaravelWorkflow\Exceptions\WorkflowTerminalException;
@@ -150,6 +152,28 @@ interface WorkflowEngine
     public function return(
         WorkflowInstance $instance,
         WorkflowStep|string|null $targetStep = null,
+        mixed $user = null,
+        ?string $comment = null,
+    ): WorkflowInstance;
+
+    // -------------------------------------------------------------------
+    //  Automation (US5)
+    // -------------------------------------------------------------------
+
+    /**
+     * Re-enter the most recently failed step as a fresh step instance
+     * and resume the automation chain.
+     *
+     * Asserts the instance is currently `failed` (else InvalidStateException).
+     * If the failed step is `automated`, the AutomationRunner is invoked
+     * synchronously so the chain continues until a human-gated step,
+     * an `end` step, or a second failure.
+     *
+     * @throws InvalidStateException
+     * @throws AutomationLoopGuardException
+     */
+    public function retry(
+        WorkflowInstance $instance,
         mixed $user = null,
         ?string $comment = null,
     ): WorkflowInstance;

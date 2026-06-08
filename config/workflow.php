@@ -136,6 +136,7 @@ return [
     'automation' => [
         'max_retry_attempts' => 3,
         'retry_backoff_seconds' => [10, 60, 300],
+        'max_chain_depth' => 50,
     ],
 
     /*
