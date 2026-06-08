@@ -5,6 +5,7 @@ declare(strict_types=1);
 namespace HFlow\LaravelWorkflow\Models;
 
 use HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory;
+use HFlow\LaravelWorkflow\Concerns\AppliesTenantScope;
 use HFlow\LaravelWorkflow\Concerns\HasUuid;
 use HFlow\LaravelWorkflow\Enums\ActorType;
 use HFlow\LaravelWorkflow\Enums\HistoryEvent;
@@ -27,6 +28,7 @@ use Illuminate\Support\Carbon;
  *
  * @property int $id
  * @property string $uuid
+ * @property int|null $tenant_id
  * @property int $workflow_instance_id
  * @property int|null $step_instance_id
  * @property int|null $from_step_id
@@ -43,6 +45,7 @@ use Illuminate\Support\Carbon;
 final class WorkflowHistory extends Model
 {
     use AppendOnlyHistory;
+    use AppliesTenantScope;
     use HasFactory;
     use HasUuid;
 
@@ -66,7 +69,7 @@ final class WorkflowHistory extends Model
     }
 
     protected $fillable = [
-        'uuid', 'workflow_instance_id', 'step_instance_id',
+        'uuid', 'tenant_id', 'workflow_instance_id', 'step_instance_id',
         'from_step_id', 'to_step_id', 'action_code', 'event',
         'actor_id', 'actor_type', 'comment', 'metadata',
         'performed_at', 'created_at',

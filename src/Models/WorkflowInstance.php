@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Models;
 
+use HFlow\LaravelWorkflow\Concerns\AppliesTenantScope;
 use HFlow\LaravelWorkflow\Enums\InstanceStatus;
 use Illuminate\Database\Eloquent\Model;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -30,6 +31,8 @@ use Illuminate\Support\Carbon;
  */
 final class WorkflowInstance extends WorkflowModel
 {
+    use AppliesTenantScope;
+
     protected function tableName(): string
     {
         return 'instances';

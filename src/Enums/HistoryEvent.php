@@ -17,6 +17,8 @@ enum HistoryEvent: string
     case Completed = 'completed';
     case Cancelled = 'cancelled';
     case CommentAdded = 'comment_added';
+    case OnHold = 'on_hold';
+    case Resumed = 'resumed';
     case Error = 'error';
 
     /**
@@ -51,6 +53,8 @@ enum HistoryEvent: string
             self::Completed => ['final_status'],
             self::Cancelled => ['reason'],
             self::CommentAdded => ['step_instance_id'],
+            self::OnHold => ['reason'],
+            self::Resumed => ['reason'],
             self::Error => ['exception', 'message'],
         };
     }

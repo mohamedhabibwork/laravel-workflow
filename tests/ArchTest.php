@@ -146,3 +146,51 @@ if (is_dir(__DIR__.'/../src/Engines')) {
             ->toBe([], "The following files in src/Engines/ call ->update() or ->delete() on a WorkflowHistory (append-only invariant violation):\n".implode("\n", $offenders));
     });
 }
+
+// T068 — Tenancy invariant: every model that participates in tenant scoping
+// declares `tenant_id` in either `$fillable` (mass-assigned) or a class-level
+// `@property` docblock (typed access). The four tenant-aware models are
+// Workflow, WorkflowStep, WorkflowInstance, and WorkflowHistory.
+if (is_dir(__DIR__.'/../src/Models')) {
+    $tenantModels = [
+        'HFlow\\LaravelWorkflow\\Models\\Workflow',
+        'HFlow\\LaravelWorkflow\\Models\\WorkflowStep',
+        'HFlow\\LaravelWorkflow\\Models\\WorkflowInstance',
+        'HFlow\\LaravelWorkflow\\Models\\WorkflowHistory',
+    ];
+
+    foreach ($tenantModels as $fqcn) {
+        if (! class_exists($fqcn)) {
+            continue;
+        }
+
+        $short = class_basename($fqcn);
+
+        arch("{$short} declares tenant_id in \$fillable or @property docblock (T068)")
+            ->expect($fqcn)
+            ->toBeClass();
+
+        it("{$short} exposes tenant_id via \$fillable or a typed docblock (T068)", function () use ($fqcn, $short): void {
+            $rc = new ReflectionClass($fqcn);
+
+            $hasFillable = false;
+            if ($rc->hasProperty('fillable')) {
+                $prop = $rc->getProperty('fillable');
+                $prop->setAccessible(true);
+                $value = $prop->getDefaultValue();
+                if (is_array($value) && in_array('tenant_id', $value, true)) {
+                    $hasFillable = true;
+                }
+            }
+
+            $hasProperty = false;
+            $doc = $rc->getDocComment();
+            if (is_string($doc) && preg_match('/@property[^@]*\$tenant_id\b/m', $doc) === 1) {
+                $hasProperty = true;
+            }
+
+            expect($hasFillable || $hasProperty)
+                ->toBeTrue("{$short} must declare `tenant_id` in \$fillable or via a @property docblock (T068).");
+        });
+    }
+}

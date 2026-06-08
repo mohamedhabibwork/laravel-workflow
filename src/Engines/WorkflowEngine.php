@@ -253,6 +253,15 @@ final class WorkflowEngine implements WorkflowEngineContract
         ];
     }
 
+    /**
+     * Resolve the current tenant id from the configured provider (US7).
+     * Returns null when tenancy is disabled or the resolver returns null.
+     */
+    private function currentTenantId(): int|string|null
+    {
+        return Workflow::currentTenantId();
+    }
+
     // -------------------------------------------------------------------
     //  US1 — Design-time: define / activate / version
     // -------------------------------------------------------------------
@@ -281,8 +290,10 @@ final class WorkflowEngine implements WorkflowEngineContract
     public function define(string $key, array $definition): Workflow
     {
         return DB::transaction(function () use ($key, $definition): Workflow {
+            $tenantId = $this->currentTenantId();
             $workflow = new Workflow;
             $workflow->fill([
+                'tenant_id' => $tenantId,
                 'name' => (string) ($definition['name'] ?? $key),
                 'code' => $key,
                 'description' => $definition['description'] ?? null,
@@ -370,6 +381,7 @@ final class WorkflowEngine implements WorkflowEngineContract
             $new->version = $source->version + 1;
             $new->is_current_version = false;
             $new->status = WorkflowStatus::Draft;
+            $new->tenant_id = $source->tenant_id;
             $new->fill($overrides);
             $new->save();
 
@@ -379,6 +391,7 @@ final class WorkflowEngine implements WorkflowEngineContract
                 /** @var WorkflowStep $step */
                 $newStep = $step->replicate(['id', 'uuid', 'workflow_id', 'created_at', 'updated_at']);
                 $newStep->workflow_id = $new->getKey();
+                $newStep->tenant_id = $source->tenant_id;
                 $newStep->save();
                 $stepIdMap[$step->getKey()] = $newStep->getKey();
 
@@ -1518,18 +1531,75 @@ final class WorkflowEngine implements WorkflowEngineContract
         mixed $user = null,
         ?string $comment = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::hold() will be implemented in US7 (T063-T068).',
-        );
+        $instance = $instance->fresh();
+
+        if ($instance->status->isTerminal()) {
+            throw WorkflowTerminalException::forInstance($instance->status);
+        }
+
+        if ($instance->status === InstanceStatus::OnHold) {
+            return $instance;
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use ($instance, $comment, $actorId, $actorType): WorkflowInstance {
+            $instance->status = InstanceStatus::OnHold;
+            $instance->save();
+
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'event' => HistoryEvent::OnHold,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['reason' => 'on_hold'],
+            ]);
+
+            return $instance->refresh();
+        });
     }
 
     public function resume(
         WorkflowInstance $instance,
         mixed $user = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::resume() will be implemented in US7 (T063-T068).',
-        );
+        $instance = $instance->fresh();
+
+        if ($instance->status !== InstanceStatus::OnHold) {
+            throw InvalidStateException::forInstance(
+                expected: InstanceStatus::OnHold->value,
+                actual: $instance->status,
+            );
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use ($instance, $actorId, $actorType): WorkflowInstance {
+            $instance->status = InstanceStatus::InProgress;
+            $instance->save();
+
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'event' => HistoryEvent::Resumed,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => null,
+                'metadata' => ['reason' => 'resumed'],
+            ]);
+
+            return $instance->refresh();
+        });
     }
 
     public function cancel(
@@ -1537,9 +1607,46 @@ final class WorkflowEngine implements WorkflowEngineContract
         mixed $user = null,
         ?string $comment = null,
     ): WorkflowInstance {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::cancel() will be implemented in US7 (T063-T068).',
-        );
+        $instance = $instance->fresh();
+
+        if ($instance->status->isTerminal()) {
+            throw WorkflowTerminalException::forInstance($instance->status);
+        }
+
+        $actorId = is_object($user) && method_exists($user, 'getKey')
+            ? (int) $user->getKey()
+            : null;
+        $actorType = $actorId !== null ? ActorType::User : ActorType::System;
+        $now = Carbon::now();
+
+        return DB::transaction(function () use ($instance, $comment, $actorId, $actorType, $now): WorkflowInstance {
+            // Close all remaining active step instances as skipped.
+            WorkflowStepInstance::query()
+                ->where('workflow_instance_id', $instance->getKey())
+                ->where('status', StepInstanceStatus::Active->value)
+                ->update([
+                    'status' => StepInstanceStatus::Skipped->value,
+                    'completed_at' => $now,
+                    'action_taken' => 'cancel',
+                    'comment' => 'cancelled with instance',
+                ]);
+
+            $instance->status = InstanceStatus::Cancelled;
+            $instance->completed_at = $now;
+            $instance->save();
+
+            $this->recorder()->record([
+                'tenant_id' => $instance->tenant_id,
+                'workflow_instance_id' => $instance->getKey(),
+                'event' => HistoryEvent::Cancelled,
+                'actor_id' => $actorId,
+                'actor_type' => $actorType,
+                'comment' => $comment,
+                'metadata' => ['reason' => 'cancelled'],
+            ]);
+
+            return $instance->refresh();
+        });
     }
 
     public function history(
@@ -1562,12 +1669,14 @@ final class WorkflowEngine implements WorkflowEngineContract
     {
         $stepIds = [];
         $position = 0;
+        $tenantId = $workflow->tenant_id;
 
         foreach ($stepRows as $i => $row) {
             $this->assertStepRow($row, $i);
 
             $step = new WorkflowStep;
             $step->fill([
+                'tenant_id' => $tenantId,
                 'workflow_id' => $workflow->getKey(),
                 'name' => (string) $row['name'],
                 'code' => (string) $row['key'],

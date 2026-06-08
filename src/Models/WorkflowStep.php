@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Models;
 
+use HFlow\LaravelWorkflow\Concerns\AppliesTenantScope;
 use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
 use HFlow\LaravelWorkflow\Enums\MatchMode;
 use HFlow\LaravelWorkflow\Enums\StepType;
@@ -33,6 +34,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 final class WorkflowStep extends WorkflowModel
 {
+    use AppliesTenantScope;
+
     protected function tableName(): string
     {
         return 'steps';

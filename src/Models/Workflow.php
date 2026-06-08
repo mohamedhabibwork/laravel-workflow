@@ -4,6 +4,7 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow\Models;
 
+use HFlow\LaravelWorkflow\Concerns\AppliesTenantScope;
 use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
 use HFlow\LaravelWorkflow\Enums\WorkflowType;
 use Illuminate\Database\Eloquent\Relations\BelongsTo;
@@ -29,6 +30,8 @@ use Illuminate\Database\Eloquent\Relations\HasMany;
  */
 final class Workflow extends WorkflowModel
 {
+    use AppliesTenantScope;
+
     protected function tableName(): string
     {
         return 'workflows';
