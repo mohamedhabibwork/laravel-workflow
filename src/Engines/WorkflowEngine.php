@@ -792,10 +792,8 @@ final class WorkflowEngine implements WorkflowEngineContract
         $authorizerRegistry = app()->bound(AuthorizerRegistry::class)
             ? app()->make(AuthorizerRegistry::class)
             : null;
-        $authorizer = $authorizerRegistry !== null
-            ? $authorizerRegistry->get($step->authorization_mode?->value ?? 'public')
-            : new PublicAuthorizer;
-        if (! $authorizer->authorize($user, $instance, $current, $step)) {
+        $eligibility = new EligibilityChecker($authorizerRegistry);
+        if (! $eligibility->isEligible($user, $instance, $current)) {
             $userId = is_object($user) && method_exists($user, 'getKey')
                 ? (string) $user->getKey()
                 : (string) ($user ?? 'null');
@@ -932,7 +930,7 @@ final class WorkflowEngine implements WorkflowEngineContract
                 'event' => HistoryEvent::ActionPerformed,
                 'actor_id' => $actorId,
                 'actor_type' => $actorType,
-                'comment' => null,
+                'comment' => $comment,
                 'metadata' => ['resolved_action_code' => $actionCode],
             ]);
 

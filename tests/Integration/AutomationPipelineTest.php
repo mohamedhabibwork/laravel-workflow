@@ -108,7 +108,7 @@ final class StepHandlerRecovers implements CustomStepHandler
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_auto', function ($t): void {
-        $t->bigIncrements('id');
+        $t->id('id');
         $t->string('reference')->nullable();
         $t->timestamps();
     });

@@ -141,7 +141,7 @@ Options:
   --strict         Fail on warnings (default).
   --no-strict      Warnings are reported but compile proceeds.
   --tenant[=ID]    Tenant id to scope the compile (defaults to current tenant context).
-  --version[=N]    Force a specific version number (default: 1 for new, max+1 for existing).
+  --workflow-version[=N]    Force a specific version number (default: 1 for new, max+1 for existing).
 ```
 
 Output (success):

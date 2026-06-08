@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow;
 
+use HFlow\LaravelWorkflow\Attributes\Compilation\AttributeCompiler;
+use HFlow\LaravelWorkflow\Attributes\Compilation\AttributeCompilerContract;
+use HFlow\LaravelWorkflow\Attributes\Discovery\AttributeWorkflowLoader;
+use HFlow\LaravelWorkflow\Commands\CompileWorkflowAttributesCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowDiagnoseCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowHistoryCommand;
 use HFlow\LaravelWorkflow\Commands\WorkflowInstanceStatusCommand;
@@ -90,6 +94,7 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
                 WorkflowInstanceStatusCommand::class,
                 WorkflowHistoryCommand::class,
                 WorkflowDiagnoseCommand::class,
+                CompileWorkflowAttributesCommand::class,
             ]);
     }
 
@@ -102,12 +107,14 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         $this->registerEngine();
         $this->registerObservabilityServices();
         $this->registerAutomationServices();
+        $this->registerAttributeServices();
     }
 
     public function packageBooted(): void
     {
         $this->registerFactoryResolver();
         $this->registerHistoryListeners();
+        $this->app->make(AttributeWorkflowLoader::class)->compileOnBoot();
     }
 
     /**
@@ -343,6 +350,15 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
             maxRetries: (int) config('workflow.automation.max_retry_attempts', 3),
             backoffSeconds: (array) config('workflow.automation.retry_backoff_seconds', [10, 60, 300]),
         ));
+    }
+
+    protected function registerAttributeServices(): void
+    {
+        $this->app->singleton(AttributeWorkflowLoader::class, fn ($app) => new AttributeWorkflowLoader($app));
+        $this->app->singleton(AttributeCompilerContract::class, fn ($app) => new AttributeCompiler(
+            loader: $app->make(AttributeWorkflowLoader::class),
+        ));
+        $this->app->alias(AttributeCompilerContract::class, AttributeCompiler::class);
     }
 
     /**

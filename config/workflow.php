@@ -141,6 +141,23 @@ return [
 
     /*
     |--------------------------------------------------------------------------
+    | PHP attribute authoring layer
+    |--------------------------------------------------------------------------
+    |
+    | Hosts may author workflow definitions as PHP classes decorated with
+    | HFlow attributes. The compiler writes those definitions into the same
+    | database tables used by the runtime engine.
+    |
+    */
+
+    'attribute_paths' => [
+        'app/Workflows',
+    ],
+
+    'compile_on_boot' => false,
+
+    /*
+    |--------------------------------------------------------------------------
     | Artisan commands
     |--------------------------------------------------------------------------
     |

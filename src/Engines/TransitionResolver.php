@@ -22,24 +22,43 @@ use Illuminate\Database\Eloquent\Collection;
  */
 final class TransitionResolver
 {
+    public function __construct(
+        private readonly ?ActionTargetRouter $actionTargetRouter = null,
+        private readonly ?SequentialFallbackRouter $sequentialFallbackRouter = null,
+    ) {}
+
+    /**
+     * @param  Collection<int, WorkflowTransition>  $transitions
+     */
     public function resolveNextStep(
         WorkflowStep $currentStep,
         ?WorkflowStepAction $action,
         Collection $transitions,
     ): WorkflowStep {
         // 1) Explicit target on the action
-        if ($action !== null && $action->target_step_id !== null) {
-            $target = WorkflowStep::query()->find($action->target_step_id);
-            if ($target instanceof WorkflowStep) {
-                return $target;
-            }
+        $target = $this->actionTargetRouter()->route($action);
+        if ($target instanceof WorkflowStep) {
+            return $target;
         }
 
         // 2) Highest-priority matching transition
         $matched = $transitions
             ->where('from_step_id', $currentStep->id)
-            ->sortByDesc('priority')
-            ->sortBy('id')
+            ->filter(function (WorkflowTransition $transition) use ($action): bool {
+                if ($transition->action_id === null) {
+                    return true;
+                }
+
+                return $action instanceof WorkflowStepAction
+                    && (int) $transition->action_id === (int) $action->getKey();
+            })
+            ->sort(function (WorkflowTransition $left, WorkflowTransition $right) use ($action): int {
+                $leftExact = $action instanceof WorkflowStepAction && (int) $left->action_id === (int) $action->getKey() ? 0 : 1;
+                $rightExact = $action instanceof WorkflowStepAction && (int) $right->action_id === (int) $action->getKey() ? 0 : 1;
+
+                return [$leftExact, -((int) $left->priority), (int) $left->id]
+                    <=> [$rightExact, -((int) $right->priority), (int) $right->id];
+            })
             ->first();
 
         if ($matched instanceof WorkflowTransition) {
@@ -49,8 +68,23 @@ final class TransitionResolver
             }
         }
 
+        $fallback = $this->sequentialFallbackRouter()->route($currentStep);
+        if ($fallback instanceof WorkflowStep) {
+            return $fallback;
+        }
+
         throw new TransitionNotFoundException(
             "No transition out of step [{$currentStep->code}] for action [".($action?->code ?? 'auto').']',
         );
+    }
+
+    private function actionTargetRouter(): ActionTargetRouter
+    {
+        return $this->actionTargetRouter ?? new ActionTargetRouter;
+    }
+
+    private function sequentialFallbackRouter(): SequentialFallbackRouter
+    {
+        return $this->sequentialFallbackRouter ?? new SequentialFallbackRouter;
     }
 }

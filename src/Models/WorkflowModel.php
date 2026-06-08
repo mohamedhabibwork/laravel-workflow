@@ -20,7 +20,7 @@ use Illuminate\Database\Eloquent\SoftDeletes;
  *
  * Conventions enforced by this base:
  *  - Table name is `config('workflow.table_prefix') . tableName()`
- *  - UUID v4 primary key (`id` is BIGINT, `uuid` is the public key)
+ *  - UUID v7 primary key (`id` is BIGINT, `uuid` is the public key)
  *  - Soft delete via `is_deleted`/`deleted_at` columns
  *  - Audit columns (`created_by`, `updated_by`, `deleted_by`)
  *
@@ -33,11 +33,6 @@ abstract class WorkflowModel extends Model
     use HasUuid;
     use HasWorkflowTimestamps;
     use SoftDeletes;
-
-    /**
-     * The column used to indicate soft deletion.
-     */
-    public const DELETED_AT = 'deleted_at';
 
     /**
      * Logical (un-prefixed) table name. Subclasses MUST override.
@@ -63,7 +58,7 @@ abstract class WorkflowModel extends Model
     public function casts(): array
     {
         return [
-            self::DELETED_AT => 'datetime',
+            $this->getDeletedAtColumn() => 'datetime',
         ];
     }
 }

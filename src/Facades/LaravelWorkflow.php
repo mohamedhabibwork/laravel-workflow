@@ -9,17 +9,20 @@ use Illuminate\Support\Facades\Facade;
 
 /**
  * @method static \HFlow\LaravelWorkflow\Models\Workflow define(string $key, array $definition): \HFlow\LaravelWorkflow\Models\Workflow
- * @method static \HFlow\LaravelWorkflow\Models\Workflow activate(string $key): \HFlow\LaravelWorkflow\Models\Workflow
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance start(string $key, mixed $subject, array $context = []): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Actions\ActionSet availableActions(string $instanceId, ?string $stepKey = null, mixed $user = null): \HFlow\LaravelWorkflow\Actions\ActionSet
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance perform(string $instanceId, string $actionKey, mixed $user, array $payload = []): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance hold(string $instanceId, ?string $reason = null, mixed $actor = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance resume(string $instanceId, mixed $actor = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance cancel(string $instanceId, ?string $reason = null, mixed $actor = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance skipStep(string $instanceId, string $stepKey, ?string $reason = null, mixed $actor = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance returnToStep(string $instanceId, string $currentStepKey, string $targetStepKey, ?string $reason = null, mixed $actor = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
- * @method static \HFlow\LaravelWorkflow\Engines\HistoryRecorder history()
- * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance currentStep(string $instanceId): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\Workflow activate(\HFlow\LaravelWorkflow\Models\Workflow|string $workflow): \HFlow\LaravelWorkflow\Models\Workflow
+ * @method static \Illuminate\Support\Collection versions(\HFlow\LaravelWorkflow\Models\Workflow|string $workflow): \Illuminate\Support\Collection
+ * @method static \HFlow\LaravelWorkflow\Models\Workflow createNewVersion(\HFlow\LaravelWorkflow\Models\Workflow $workflow, array $overrides = []): \HFlow\LaravelWorkflow\Models\Workflow
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance start(\HFlow\LaravelWorkflow\Models\Workflow|string $workflow, \Illuminate\Database\Eloquent\Model $subject, array $context = [], mixed $initiator = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowStepInstance|\Illuminate\Support\Collection currentStep(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance): \HFlow\LaravelWorkflow\Models\WorkflowStepInstance|\Illuminate\Support\Collection
+ * @method static \HFlow\LaravelWorkflow\Actions\ActionSet availableActions(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null): \HFlow\LaravelWorkflow\Actions\ActionSet
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance perform(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, string $actionCode, mixed $user = null, ?array $payload = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance skip(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null, ?string $comment = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance return(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, \HFlow\LaravelWorkflow\Models\WorkflowStep|string|null $targetStep = null, mixed $user = null, ?string $comment = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance retry(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null, ?string $comment = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance hold(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null, ?string $comment = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance resume(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \HFlow\LaravelWorkflow\Models\WorkflowInstance cancel(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, mixed $user = null, ?string $comment = null): \HFlow\LaravelWorkflow\Models\WorkflowInstance
+ * @method static \Illuminate\Support\Collection history(\HFlow\LaravelWorkflow\Models\WorkflowInstance $instance, ?int $limit = null, ?string $event = null): \Illuminate\Support\Collection
  *
  * @see \HFlow\LaravelWorkflow\Engines\WorkflowEngine
  */

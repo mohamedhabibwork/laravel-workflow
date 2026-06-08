@@ -52,23 +52,32 @@ return [
 
     'database_connection' => null, // null = host's default connection
 
-    'tenant' => [
-        'enabled' => false,         // set true to opt into multi-tenancy
+    'tenancy' => [
+        'enabled' => false,        // set true to opt into multi-tenancy
         'column'  => 'tenant_id',
-        'scope_resolver' => null,  // FQCN implementing TenantScopeProvider
+        'scope_provider' => null, // FQCN implementing TenantScopeProvider
+    ],
+
+    'events' => [
+        'fire_laravel_events' => true,
     ],
 
     'history' => [
-        'append_only' => true,     // locked; never change this
+        'on_dispatch_failure' => 'skip',
     ],
 
     'automation' => [
+        'max_retry_attempts' => 3,
+        'retry_backoff_seconds' => [10, 60, 300],
         'max_chain_depth' => 50,   // safety guard against infinite loops
     ],
+
+    'attribute_paths' => ['app/Workflows'],
+    'compile_on_boot' => false,
 ];
 ```
 
-If you set `'tenant.enabled' => true`, also implement the `TenantScopeProvider` contract so the engine can ask "what is the current tenant?":
+If you set `'tenancy.enabled' => true`, also implement the `TenantScopeProvider` contract so the engine can ask "what is the current tenant?":
 
 ```php
 namespace App\Workflow\Tenancy;
@@ -87,10 +96,10 @@ final class CurrentTenantFromRequest implements TenantScopeProvider
 Then in `config/workflow.php`:
 
 ```php
-'tenant' => [
+'tenancy' => [
     'enabled' => true,
     'column'  => 'tenant_id',
-    'scope_resolver' => \App\Workflow\Tenancy\CurrentTenantFromRequest::class,
+    'scope_provider' => \App\Workflow\Tenancy\CurrentTenantFromRequest::class,
 ],
 ```
 
@@ -106,14 +115,15 @@ use HFlow\LaravelWorkflow\Models\WorkflowStep;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAssignee;
 use HFlow\LaravelWorkflow\Models\WorkflowStepAction;
 use HFlow\LaravelWorkflow\Models\WorkflowTransition;
-use HFlow\LaravelWorkflow\States\WorkflowType;
-use HFlow\LaravelWorkflow\States\StepType;
-use HFlow\LaravelWorkflow\States\AuthorizationMode;
-use HFlow\LaravelWorkflow\States\MatchMode;
-use HFlow\LaravelWorkflow\States\ActionType;
-use HFlow\LaravelWorkflow\States\ActionAvailabilityMode;
-use HFlow\LaravelWorkflow\States\TransitionType;
-use HFlow\LaravelWorkflow\States\AssigneeType;
+use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
+use HFlow\LaravelWorkflow\Enums\ActionType;
+use HFlow\LaravelWorkflow\Enums\AssigneeType;
+use HFlow\LaravelWorkflow\Enums\AuthorizationMode;
+use HFlow\LaravelWorkflow\Enums\MatchMode;
+use HFlow\LaravelWorkflow\Enums\StepType;
+use HFlow\LaravelWorkflow\Enums\TransitionType;
+use HFlow\LaravelWorkflow\Enums\WorkflowStatus;
+use HFlow\LaravelWorkflow\Enums\WorkflowType;
 
 // 1) Create the workflow.
 $workflow = Workflow::create([
@@ -122,7 +132,7 @@ $workflow = Workflow::create([
     'description' => 'Two-step approval for high-value orders.',
     'type'        => WorkflowType::Approval,
     'subject_type' => \App\Models\Order::class, // optional; null = generic
-    'status'      => \HFlow\LaravelWorkflow\States\WorkflowStatus::Draft,
+    'status'      => WorkflowStatus::Draft,
 ]);
 
 // 2) Create the steps.
@@ -169,7 +179,18 @@ WorkflowStepAssignee::create([
     'assignee_value' => 'manager',
 ]);
 
-// 5) Add the actions on the manager-review step.
+// 5) Add the actions on the start and manager-review steps.
+WorkflowStepAction::create([
+    'step_id'           => $start->id,
+    'code'              => 'submit',
+    'name'              => 'Submit',
+    'type'              => ActionType::Submit,
+    'availability_mode' => ActionAvailabilityMode::General,
+    'target_step_id'    => $managerReview->id,
+    'requires_comment'  => false,
+    'sort_order'        => 0,
+]);
+
 $approveAction = WorkflowStepAction::create([
     'step_id'           => $managerReview->id,
     'code'              => 'approve',
@@ -246,6 +267,14 @@ The engine has written three rows so far:
 $actions = $engine->availableActions($instance, auth()->user());
 
 foreach ($actions as $action) {
+    echo $action->code . ' — ' . $action->name . PHP_EOL;
+    // 'submit — Submit'
+}
+
+$instance = $engine->perform($instance, 'submit', auth()->user());
+$managerActions = $engine->availableActions($instance, auth()->user());
+
+foreach ($managerActions as $action) {
     echo $action->code . ' — ' . $action->name . PHP_EOL;
     // 'approve — Approve'
     // 'reject — Reject'

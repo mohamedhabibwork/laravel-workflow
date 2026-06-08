@@ -25,7 +25,7 @@ use Illuminate\Support\Facades\Schema;
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders_quorum', function ($t): void {
-        $t->bigIncrements('id');
+        $t->id('id');
         $t->string('reference')->nullable();
         $t->timestamps();
     });

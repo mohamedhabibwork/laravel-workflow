@@ -26,25 +26,27 @@ final readonly class Action
         public array $metadata = [],
     ) {}
 
-    public static function approve(): self
+    public static function approve(...$metadata): self
     {
         return new self(
             key: 'approve',
             type: ActionType::Approve,
             label: 'Approve',
+            metadata: $metadata,
         );
     }
 
-    public static function reject(): self
+    public static function reject(...$metadata): self
     {
         return new self(
             key: 'reject',
             type: ActionType::Reject,
             label: 'Reject',
+            metadata: $metadata,
         );
     }
 
-    public static function custom(string $key, string $handlerClass, string $label): self
+    public static function custom(string $key, string $handlerClass, string $label, ...$metadata): self
     {
         return new self(
             key: $key,
@@ -52,6 +54,7 @@ final readonly class Action
             label: $label,
             availability: ActionAvailabilityMode::Custom,
             handlerClass: $handlerClass,
+            metadata: $metadata,
         );
     }
 
@@ -87,7 +90,7 @@ final readonly class Action
             windowStart: $data['windowStart'] ?? null,
             windowEnd: $data['windowEnd'] ?? null,
             handlerClass: $data['handlerClass'] ?? null,
-            metadata: (array) ($data['metadata'] ?? []),
+            metadata: \Arr::wrap($data['metadata'] ?? []),
         );
     }
 }

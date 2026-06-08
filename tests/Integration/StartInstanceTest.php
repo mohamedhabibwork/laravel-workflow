@@ -45,7 +45,7 @@ $hostModelClass = new class extends Model
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders', function ($t): void {
-        $t->bigIncrements('id');
+        $t->id('id');
         $t->string('reference')->nullable();
         $t->timestamps();
     });
@@ -132,7 +132,7 @@ it('(c) refuses to start an instance with the wrong subject class', function () 
         public $timestamps = true;
     };
     Schema::create('host_invoices', function ($t): void {
-        $t->bigIncrements('id');
+        $t->id('id');
         $t->string('number')->nullable();
         $t->timestamps();
     });

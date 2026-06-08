@@ -44,7 +44,7 @@ $hostModelClass = new class extends Model
 beforeEach(function (): void {
     $this->loadWorkflowMigrations();
     Schema::create('host_orders', function ($t): void {
-        $t->bigIncrements('id');
+        $t->id('id');
         $t->string('reference')->nullable();
         $t->timestamps();
     });

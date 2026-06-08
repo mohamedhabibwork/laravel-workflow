@@ -12,6 +12,13 @@ declare(strict_types=1);
  |
  */
 
+use HFlow\LaravelWorkflow\Attributes\Action as WorkflowActionAttribute;
+use HFlow\LaravelWorkflow\Attributes\Assignee;
+use HFlow\LaravelWorkflow\Attributes\AsWorkflow;
+use HFlow\LaravelWorkflow\Attributes\Authorizer;
+use HFlow\LaravelWorkflow\Attributes\Condition;
+use HFlow\LaravelWorkflow\Attributes\Step;
+use HFlow\LaravelWorkflow\Attributes\Transition;
 use HFlow\LaravelWorkflow\Concerns\AppendOnlyHistory;
 use HFlow\LaravelWorkflow\Enums\ActionAvailabilityMode;
 use HFlow\LaravelWorkflow\Enums\ActionType;
@@ -136,7 +143,7 @@ if (is_dir(__DIR__.'/../src/Engines')) {
             // WorkflowHistory.
             if (str_contains($source, $historyFqcn)) {
                 if (preg_match('/->(update|delete)\s*\(/', $source, $matches, PREG_OFFSET_CAPTURE) === 1) {
-                    $line = substr_count(substr($source, 0, $matches[0][1]), "\n") + 1;
+                    $line = substr_count(substr($source, 0, (int) $matches[0][1]), "\n") + 1;
                     $offenders[] = "{$relative}:{$line} ({$matches[0][0]})";
                 }
             }
@@ -176,7 +183,6 @@ if (is_dir(__DIR__.'/../src/Models')) {
             $hasFillable = false;
             if ($rc->hasProperty('fillable')) {
                 $prop = $rc->getProperty('fillable');
-                $prop->setAccessible(true);
                 $value = $prop->getDefaultValue();
                 if (is_array($value) && in_array('tenant_id', $value, true)) {
                     $hasFillable = true;
@@ -193,4 +199,72 @@ if (is_dir(__DIR__.'/../src/Models')) {
                 ->toBeTrue("{$short} must declare `tenant_id` in \$fillable or via a @property docblock (T068).");
         });
     }
+}
+
+// T092 — PHP attribute authoring-layer architecture.
+if (is_dir(__DIR__.'/../src/Attributes')) {
+    arch('workflow attribute primitives are final classes')
+        ->expect([
+            AsWorkflow::class,
+            Step::class,
+            WorkflowActionAttribute::class,
+            Condition::class,
+            Authorizer::class,
+            Assignee::class,
+            Transition::class,
+        ])
+        ->toBeClasses()
+        ->toBeFinal();
+
+    it(/**
+     * @throws ReflectionException
+     */ 'every root workflow attribute declares an Attribute::TARGET_* flag', function (): void {
+        $attributeClasses = [
+            AsWorkflow::class,
+            Step::class,
+            WorkflowActionAttribute::class,
+            Condition::class,
+            Authorizer::class,
+            Assignee::class,
+            Transition::class,
+        ];
+
+        foreach ($attributeClasses as $class) {
+            $reflection = new ReflectionClass($class);
+            $attribute = $reflection->getAttributes(Attribute::class)[0] ?? null;
+
+            expect($attribute)->not->toBeNull("{$class} must be a native PHP attribute.");
+
+            $flags = $attribute->getArguments()[0] ?? 0;
+
+            expect(($flags & (
+                Attribute::TARGET_CLASS
+                | Attribute::TARGET_METHOD
+                | Attribute::TARGET_PROPERTY
+            )) !== 0)->toBeTrue("{$class} must declare an Attribute::TARGET_* flag.");
+        }
+    });
+
+    it('AttributeCompiler only reflects HFlow workflow attribute classes', function (): void {
+        $source = file_get_contents(__DIR__.'/../src/Attributes/Compilation/AttributeCompiler.php');
+        expect($source)->not->toBeFalse();
+
+        preg_match_all('/getAttributes\(([^)]+)::class\)/', (string) $source, $matches);
+
+        $allowed = [
+            'Action',
+            'AsWorkflow',
+            'Assignee',
+            'Authorizer',
+            'Condition',
+            'Step',
+            'Transition',
+        ];
+
+        expect($matches[1])->not->toBeEmpty();
+
+        foreach ($matches[1] as $class) {
+            expect($allowed)->toContain($class);
+        }
+    });
 }

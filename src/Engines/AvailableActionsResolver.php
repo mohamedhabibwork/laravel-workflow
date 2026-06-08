@@ -34,6 +34,7 @@ final class AvailableActionsResolver
     public function __construct(
         private readonly AuthorizerRegistry $authorizers,
         private readonly ConditionEvaluator $conditions,
+        private readonly ?EligibilityChecker $eligibilityChecker = null,
     ) {}
 
     public function resolve(WorkflowInstance $instance, mixed $user): ActionSet
@@ -48,7 +49,7 @@ final class AvailableActionsResolver
             return new ActionSet([]);
         }
 
-        if (! $this->authorizerFor($current->step)->authorize($user, $instance, $current, $current->step)) {
+        if (! $this->isEligible($user, $instance, $current)) {
             return new ActionSet([]);
         }
 
@@ -161,5 +162,14 @@ final class AvailableActionsResolver
             : AuthorizationMode::from((string) $step->authorization_mode);
 
         return $this->authorizers->get($mode->value);
+    }
+
+    private function isEligible(mixed $user, WorkflowInstance $instance, WorkflowStepInstance $current): bool
+    {
+        if ($this->eligibilityChecker instanceof EligibilityChecker) {
+            return $this->eligibilityChecker->isEligible($user, $instance, $current);
+        }
+
+        return $this->authorizerFor($current->step)->authorize($user, $instance, $current, $current->step);
     }
 }
