@@ -4,6 +4,10 @@ declare(strict_types=1);
 
 namespace HFlow\LaravelWorkflow;
 
+use HFlow\LaravelWorkflow\Commands\WorkflowDiagnoseCommand;
+use HFlow\LaravelWorkflow\Commands\WorkflowHistoryCommand;
+use HFlow\LaravelWorkflow\Commands\WorkflowInstanceStatusCommand;
+use HFlow\LaravelWorkflow\Commands\WorkflowListCommand;
 use HFlow\LaravelWorkflow\Contracts\CustomActionHandler;
 use HFlow\LaravelWorkflow\Contracts\CustomAuthorizer;
 use HFlow\LaravelWorkflow\Contracts\CustomConditionEvaluator;
@@ -80,7 +84,13 @@ class LaravelWorkflowServiceProvider extends PackageServiceProvider
         $package
             ->name('laravel-workflow')
             ->hasConfigFile()
-            ->hasMigration('create_workflow_table');
+            ->hasMigration('create_workflow_table')
+            ->hasCommands([
+                WorkflowListCommand::class,
+                WorkflowInstanceStatusCommand::class,
+                WorkflowHistoryCommand::class,
+                WorkflowDiagnoseCommand::class,
+            ]);
     }
 
     public function packageRegistered(): void
