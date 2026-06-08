@@ -124,6 +124,7 @@ final class WorkflowEngine implements WorkflowEngineContract
      * @param  ConditionEvaluator|null  $conditionEvaluator  Optional: when present, used by skip/return guards.
      * @param  AutomationRunner|null  $automationRunner  Optional: when present, used by US5 (start/perform/retry on
      *                                                   automated steps).
+     * @param  ActivityFeed|null  $activityFeed  Optional: when present, used by {@see self::history()} (US6).
      */
     public function __construct(
         private readonly ?HistoryRecorder $historyRecorder = null,
@@ -134,6 +135,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         private readonly ?HandlerInvoker $handlerInvoker = null,
         private readonly ?ConditionEvaluator $conditionEvaluator = null,
         private readonly ?AutomationRunner $automationRunner = null,
+        private readonly ?ActivityFeed $activityFeed = null,
     ) {}
 
     /**
@@ -215,6 +217,11 @@ final class WorkflowEngine implements WorkflowEngineContract
             $this->handlerInvoker(),
             $this->transitionResolver(),
         );
+    }
+
+    private function activityFeed(): ActivityFeed
+    {
+        return $this->activityFeed ?? new ActivityFeed;
     }
 
     /**
@@ -1540,9 +1547,7 @@ final class WorkflowEngine implements WorkflowEngineContract
         ?int $limit = null,
         ?string $event = null,
     ): Collection {
-        throw InvalidWorkflowException::invalidGraph(
-            'WorkflowEngine::history() will be implemented in US6 (T059-T062).',
-        );
+        return $this->activityFeed()->read($instance, $limit, $event);
     }
 
     // -------------------------------------------------------------------
