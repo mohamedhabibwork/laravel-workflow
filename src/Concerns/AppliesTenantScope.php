@@ -6,6 +6,7 @@ namespace HFlow\LaravelWorkflow\Concerns;
 
 use HFlow\LaravelWorkflow\Contracts\TenantScopeProvider;
 use HFlow\LaravelWorkflow\QueryBuilder\TenantScope;
+use Illuminate\Database\Eloquent\Builder;
 
 /**
  * Trait that registers the {@see TenantScope} global scope on a tenant-aware
@@ -63,7 +64,7 @@ trait AppliesTenantScope
      *
      * @param  Builder<self>  $builder
      */
-    public function scopeWithTenant(\Illuminate\Database\Eloquent\Builder $builder, int|string $tenantId): \Illuminate\Database\Eloquent\Builder
+    public function scopeWithTenant(Builder $builder, int|string $tenantId): Builder
     {
         $column = (string) config('workflow.tenancy.column', 'tenant_id');
 
@@ -76,7 +77,7 @@ trait AppliesTenantScope
      *
      * @param  Builder<self>  $builder
      */
-    public function scopeForAllTenants(\Illuminate\Database\Eloquent\Builder $builder): \Illuminate\Database\Eloquent\Builder
+    public function scopeForAllTenants(Builder $builder): Builder
     {
         return $builder->withoutGlobalScope(TenantScope::class);
     }
