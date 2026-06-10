@@ -4,6 +4,7 @@ namespace HFlow\LaravelWorkflow\Tests;
 
 use HFlow\LaravelWorkflow\LaravelWorkflowServiceProvider;
 use Illuminate\Database\Eloquent\Factories\Factory;
+use Illuminate\Support\Facades\Schema;
 use Orchestra\Testbench\TestCase as Orchestra;
 
 class TestCase extends Orchestra
@@ -28,10 +29,13 @@ class TestCase extends Orchestra
     {
         config()->set('database.default', 'testing');
 
-        /*
-         foreach (\Illuminate\Support\Facades\File::allFiles(__DIR__ . '/../database/migrations') as $migration) {
-            (include $migration->getRealPath())->up();
-         }
-         */
+        $migration = include __DIR__.'/../database/migrations/create_workflow_table.php.stub';
+        $migration->up();
+
+        Schema::create('test_subjects', function ($table) {
+            $table->id();
+            $table->string('name');
+            $table->timestamps();
+        });
     }
 }

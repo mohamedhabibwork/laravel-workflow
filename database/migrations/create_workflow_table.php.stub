@@ -6,14 +6,329 @@ use Illuminate\Support\Facades\Schema;
 
 return new class extends Migration
 {
-    public function up()
+    public function up(): void
     {
-        Schema::create('laravel_workflow_table', function (Blueprint $table) {
+        $prefix = config('workflow.table_prefix', 'workflow_');
+
+        Schema::create($prefix . 'workflows', function (Blueprint $table) {
             $table->id();
+            $table->uuid('uuid')->unique();
+            $table->bigInteger('tenant_id')->nullable()->index();
+            $table->string('name');
+            $table->string('code');
+            $table->text('description')->nullable();
+            $table->string('type');
+            $table->string('subject_type')->nullable();
+            $table->integer('version')->default(1);
+            $table->boolean('is_current_version')->default(true);
+            $table->string('status');
+            $table->unsignedBigInteger('start_step_id')->nullable();
+            $table->boolean('require_explicit_transitions')->default(false);
+            $table->json('config')->nullable();
 
-            // add fields
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
 
-            $table->timestamps();
+            $table->unique(['tenant_id', 'code', 'deleted_at'], 'workflow_unique_code');
         });
+
+        Schema::create($prefix . 'workflow_steps', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('workflow_id')->constrained($prefix . 'workflows')->cascadeOnDelete();
+            $table->string('name');
+            $table->string('code');
+            $table->text('description')->nullable();
+            $table->string('type');
+            $table->integer('position')->default(0);
+            $table->string('authorization_mode');
+            $table->string('match_mode')->default('any');
+            $table->string('custom_authorizer')->nullable();
+            $table->string('handler')->nullable();
+            $table->boolean('is_skippable')->default(false);
+            $table->boolean('is_returnable')->default(false);
+            $table->integer('sla_seconds')->nullable();
+            $table->json('config')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->unique(['workflow_id', 'code', 'deleted_at'], 'step_unique_code');
+        });
+
+        Schema::create($prefix . 'workflow_step_assignees', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('step_id')->constrained($prefix . 'workflow_steps')->cascadeOnDelete();
+            $table->string('assignee_type');
+            $table->string('assignee_value')->nullable();
+            $table->string('custom_resolver')->nullable();
+            $table->integer('sort_order')->default(0);
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+        });
+
+        Schema::create($prefix . 'workflow_conditions', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->unsignedBigInteger('workflow_id')->nullable()->index();
+            $table->string('name');
+            $table->string('code');
+            $table->string('kind');
+            $table->json('expression')->nullable();
+            $table->string('evaluator')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->foreign('workflow_id')->references('id')->on($prefix . 'workflows')->nullOnDelete();
+        });
+
+        Schema::create($prefix . 'workflow_step_actions', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('step_id')->constrained($prefix . 'workflow_steps')->cascadeOnDelete();
+            $table->string('name');
+            $table->string('code');
+            $table->string('label')->nullable();
+            $table->string('type');
+            $table->string('availability_mode');
+            $table->unsignedBigInteger('guard_condition_id')->nullable();
+            $table->string('guard_class')->nullable();
+            $table->unsignedBigInteger('target_step_id')->nullable();
+            $table->boolean('requires_comment')->default(false);
+            $table->string('handler')->nullable();
+            $table->integer('sort_order')->default(0);
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->foreign('guard_condition_id')->references('id')->on($prefix . 'workflow_conditions')->nullOnDelete();
+            $table->foreign('target_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+            $table->unique(['step_id', 'code', 'deleted_at'], 'action_unique_code');
+        });
+
+        Schema::create($prefix . 'workflow_transitions', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('workflow_id')->constrained($prefix . 'workflows')->cascadeOnDelete();
+            $table->unsignedBigInteger('from_step_id')->nullable();
+            $table->unsignedBigInteger('to_step_id')->nullable();
+            $table->unsignedBigInteger('action_id')->nullable();
+            $table->unsignedBigInteger('condition_id')->nullable();
+            $table->string('type');
+            $table->integer('priority')->default(0);
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->foreign('from_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+            $table->foreign('to_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+            $table->foreign('action_id')->references('id')->on($prefix . 'workflow_step_actions')->nullOnDelete();
+            $table->foreign('condition_id')->references('id')->on($prefix . 'workflow_conditions')->nullOnDelete();
+        });
+
+        Schema::create($prefix . 'workflow_instances', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->bigInteger('tenant_id')->nullable()->index();
+            $table->foreignId('workflow_id')->constrained($prefix . 'workflows');
+            $table->integer('workflow_version');
+            $table->string('workflow_identity')->nullable()->index();
+            $table->uuid('run_id')->nullable()->unique();
+            $table->uuid('first_execution_run_id')->nullable();
+            $table->unsignedBigInteger('parent_instance_id')->nullable();
+            $table->string('subject_type');
+            $table->unsignedBigInteger('subject_id');
+            $table->unsignedBigInteger('current_step_id')->nullable();
+            $table->string('status');
+            $table->json('context')->nullable();
+            $table->json('memo')->nullable();
+            $table->json('search_attributes')->nullable();
+            $table->string('task_queue')->nullable();
+            $table->unsignedBigInteger('initiated_by')->nullable();
+            $table->timestampTz('started_at')->nullable();
+            $table->timestampTz('start_after')->nullable()->index();
+            $table->timestampTz('execution_timeout_at')->nullable()->index();
+            $table->timestampTz('run_timeout_at')->nullable()->index();
+            $table->timestampTz('completed_at')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->index(['subject_type', 'subject_id'], 'workflowable_index');
+            $table->index(['workflow_id', 'status'], 'workflow_status_index');
+            $table->index(['status', 'start_after'], 'workflow_pending_start_index');
+            $table->foreign('current_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+            $table->foreign('parent_instance_id')->references('id')->on($prefix . 'workflow_instances')->nullOnDelete();
+        });
+
+        Schema::create($prefix . 'workflow_step_instances', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('workflow_instance_id')->constrained($prefix . 'workflow_instances')->cascadeOnDelete();
+            $table->foreignId('step_id')->constrained($prefix . 'workflow_steps');
+            $table->string('status');
+            $table->timestampTz('entered_at')->nullable();
+            $table->timestampTz('completed_at')->nullable();
+            $table->timestampTz('due_at')->nullable();
+            $table->unsignedBigInteger('acted_by')->nullable();
+            $table->string('action_taken')->nullable();
+            $table->text('comment')->nullable();
+            $table->json('data')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->index(['workflow_instance_id', 'status'], 'step_status_index');
+        });
+
+        Schema::create($prefix . 'workflow_assignments', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('step_instance_id')->constrained($prefix . 'workflow_step_instances')->cascadeOnDelete();
+            $table->unsignedBigInteger('assignee_id')->index();
+            $table->string('status');
+            $table->timestampTz('assigned_at')->nullable();
+            $table->timestampTz('acted_at')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->index(['assignee_id', 'status'], 'assignment_status_index');
+        });
+
+        Schema::create($prefix . 'workflow_timers', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->bigInteger('tenant_id')->nullable()->index();
+            $table->foreignId('workflow_instance_id')->constrained($prefix . 'workflow_instances')->cascadeOnDelete();
+            $table->string('name');
+            $table->string('status');
+            $table->json('payload')->nullable();
+            $table->string('handler')->nullable();
+            $table->timestampTz('due_at')->index();
+            $table->timestampTz('fired_at')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->index(['status', 'due_at'], 'timer_due_index');
+        });
+
+        Schema::create($prefix . 'workflow_activities', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->bigInteger('tenant_id')->nullable()->index();
+            $table->foreignId('workflow_instance_id')->constrained($prefix . 'workflow_instances')->cascadeOnDelete();
+            $table->unsignedBigInteger('step_instance_id')->nullable();
+            $table->string('name');
+            $table->string('handler');
+            $table->string('task_queue')->nullable();
+            $table->string('status');
+            $table->json('input')->nullable();
+            $table->json('result')->nullable();
+            $table->text('error')->nullable();
+            $table->unsignedInteger('attempt')->default(0);
+            $table->unsignedInteger('max_attempts')->default(1);
+            $table->uuid('async_token')->nullable()->unique();
+            $table->timestampTz('available_at')->nullable()->index();
+            $table->timestampTz('started_at')->nullable();
+            $table->timestampTz('heartbeat_at')->nullable();
+            $table->timestampTz('schedule_to_close_timeout_at')->nullable()->index();
+            $table->timestampTz('start_to_close_timeout_at')->nullable()->index();
+            $table->timestampTz('completed_at')->nullable();
+
+            $table->boolean('is_deleted')->default(false);
+            $table->unsignedBigInteger('created_by')->nullable();
+            $table->unsignedBigInteger('updated_by')->nullable();
+            $table->unsignedBigInteger('deleted_by')->nullable();
+            $table->timestampsTz();
+            $table->softDeletesTz();
+
+            $table->index(['status', 'task_queue', 'available_at'], 'activity_worker_index');
+            $table->foreign('step_instance_id')->references('id')->on($prefix . 'workflow_step_instances')->nullOnDelete();
+        });
+
+        Schema::create($prefix . 'workflow_histories', function (Blueprint $table) use ($prefix) {
+            $table->id();
+            $table->uuid('uuid')->unique();
+            $table->foreignId('workflow_instance_id')->constrained($prefix . 'workflow_instances')->cascadeOnDelete();
+            $table->unsignedBigInteger('step_instance_id')->nullable();
+            $table->unsignedBigInteger('from_step_id')->nullable();
+            $table->unsignedBigInteger('to_step_id')->nullable();
+            $table->string('action_code')->nullable();
+            $table->string('event');
+            $table->unsignedBigInteger('actor_id')->nullable();
+            $table->string('actor_type');
+            $table->text('comment')->nullable();
+            $table->json('metadata')->nullable();
+            $table->timestampTz('performed_at');
+            $table->timestampTz('created_at');
+
+            $table->index(['workflow_instance_id', 'performed_at'], 'history_timeline_index');
+            $table->foreign('step_instance_id')->references('id')->on($prefix . 'workflow_step_instances')->nullOnDelete();
+            $table->foreign('from_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+            $table->foreign('to_step_id')->references('id')->on($prefix . 'workflow_steps')->nullOnDelete();
+        });
+    }
+
+    public function down(): void
+    {
+        $prefix = config('workflow.table_prefix', 'workflow_');
+
+        Schema::dropIfExists($prefix . 'workflow_histories');
+        Schema::dropIfExists($prefix . 'workflow_activities');
+        Schema::dropIfExists($prefix . 'workflow_timers');
+        Schema::dropIfExists($prefix . 'workflow_assignments');
+        Schema::dropIfExists($prefix . 'workflow_step_instances');
+        Schema::dropIfExists($prefix . 'workflow_instances');
+        Schema::dropIfExists($prefix . 'workflow_transitions');
+        Schema::dropIfExists($prefix . 'workflow_step_actions');
+        Schema::dropIfExists($prefix . 'workflow_conditions');
+        Schema::dropIfExists($prefix . 'workflow_step_assignees');
+        Schema::dropIfExists($prefix . 'workflow_steps');
+        Schema::dropIfExists($prefix . 'workflows');
     }
 };

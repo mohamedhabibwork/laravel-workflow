@@ -1,0 +1,43 @@
+name: Validate
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - '003-laravel-workflow-package'
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/validate.yml'
+  pull_request:
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/validate.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  composer:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Validate composer.json
+        run: composer validate --strict
+
+      - name: Check platform requirements
+        run: composer check-platform-reqs --no-dev

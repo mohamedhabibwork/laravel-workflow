@@ -17,10 +17,10 @@
 
 **Purpose**: Project initialization and basic structure
 
-- [ ] T001 Create package directory structure (Commands, Contracts, Enums, Facades, Models, Services, Traits) in `src/`
-- [ ] T002 Configure `composer.json` with PSR-4 autoloading for `LaravelWorkflow` and test dependencies
-- [ ] T003 [P] Configure `vendor/bin/pint` and `.editorconfig` for strict project formatting standards
-- [ ] T004 [P] Setup `tests/Pest.php` and `tests/TestCase.php` with necessary package bootstrapping
+- [x] T001 Create package directory structure (Commands, Contracts, Enums, Facades, Models, Services, Traits) in `src/`
+- [x] T002 Configure `composer.json` with PSR-4 autoloading for `LaravelWorkflow` and test dependencies
+- [x] T003 [P] Configure `vendor/bin/pint` and `.editorconfig` for strict project formatting standards
+- [x] T004 [P] Setup `tests/Pest.php` and `tests/TestCase.php` with necessary package bootstrapping
 
 ---
 
@@ -28,11 +28,11 @@
 
 **Purpose**: Core infrastructure and Enums required for all features
 
-- [ ] T005 [P] Implement PHP Enums for all status and type fields (WorkflowType, StepType, etc.) in `src/Enums/`
-- [ ] T006 Implement base migration for `workflow_` tables (Definitions and Runtime) in `database/migrations/`
-- [ ] T007 [P] Create `HasWorkflow` trait for polymorphic subject support in `src/Traits/HasWorkflow.php`
-- [ ] T008 Implement `LaravelWorkflowServiceProvider.php` to register migrations, config, and singleton services
-- [ ] T009 [P] Define core Interfaces/Contracts for custom logic in `src/Contracts/` (CustomAuthorizer, ConditionEvaluator, etc.)
+- [x] T005 [P] Implement PHP Enums for all status and type fields (WorkflowType, StepType, etc.) in `src/Enums/`
+- [x] T006 Implement base migration for `workflow_` tables (Definitions and Runtime) in `database/migrations/`
+- [x] T007 [P] Create `HasWorkflow` trait for polymorphic subject support in `src/Traits/HasWorkflow.php`
+- [x] T008 Implement `LaravelWorkflowServiceProvider.php` to register migrations, config, and singleton services
+- [x] T009 [P] Define core Interfaces/Contracts for custom logic in `src/Contracts/` (CustomAuthorizer, ConditionEvaluator, etc.)
 
 ---
 
@@ -44,16 +44,16 @@
 
 ### Tests for User Story 1
 
-- [ ] T010 [P] [US1] Create `tests/Feature/WorkflowDefinitionTest.php` for activation rules (start/end step requirements)
-- [ ] T011 [P] [US1] Create `tests/Unit/WorkflowVersioningTest.php` for blueprint immutability rules
+- [x] T010 [P] [US1] Create `tests/Feature/WorkflowDefinitionTest.php` for activation rules (start/end step requirements)
+- [x] T011 [P] [US1] Create `tests/Unit/WorkflowVersioningTest.php` for blueprint immutability rules
 
 ### Implementation for User Story 1
 
-- [ ] T012 [P] [US1] Implement `Workflow` and `WorkflowStep` models in `src/Models/` with UUID and audit traits
-- [ ] T013 [P] [US1] Implement `WorkflowTransition` and `WorkflowCondition` models in `src/Models/`
-- [ ] T014 [US1] Implement `WorkflowService::activate()` with validation for start/end steps in `src/Services/WorkflowService.php`
-- [ ] T015 [US1] Implement versioning logic (cloning definition on structural edit) in `src/Services/WorkflowService.php`
-- [ ] T016 [US1] Create `WorkflowFactory` and `WorkflowStepFactory` in `database/factories/` for testing support
+- [x] T012 [P] [US1] Implement `Workflow` and `WorkflowStep` models in `src/Models/` with UUID and audit traits
+- [x] T013 [P] [US1] Implement `WorkflowTransition` and `WorkflowCondition` models in `src/Models/`
+- [x] T014 [US1] Implement `WorkflowService::activate()` with validation for start/end steps in `src/Services/WorkflowService.php`
+- [x] T015 [US1] Implement versioning logic (cloning definition on structural edit) in `src/Services/WorkflowService.php`
+- [x] T016 [US1] Create `WorkflowFactory` and `WorkflowStepFactory` in `database/factories/` for testing support
 
 ---
 
@@ -65,17 +65,17 @@
 
 ### Tests for User Story 2
 
-- [ ] T017 [P] [US2] Create `tests/Feature/ActionResolutionTest.php` for eligibility and availability logic
-- [ ] T018 [P] [US2] Create `tests/Feature/WorkflowAdvancementTest.php` for state transitions and advancement
+- [x] T017 [P] [US2] Create `tests/Feature/ActionResolutionTest.php` for eligibility and availability logic
+- [x] T018 [P] [US2] Create `tests/Feature/WorkflowAdvancementTest.php` for state transitions and advancement
 
 ### Implementation for User Story 2
 
-- [ ] T019 [P] [US2] Implement `WorkflowInstance` and `WorkflowStepInstance` models in `src/Models/`
-- [ ] T020 [P] [US2] Implement `WorkflowAssignment` and `WorkflowHistory` models in `src/Models/`
-- [ ] T021 [US2] Implement `ActionResolver` service in `src/Services/ActionResolver.php` (Eligibility -> Gathering -> Availability)
-- [ ] T022 [US2] Implement `ConditionEvaluator` service in `src/Services/ConditionEvaluator.php` (Expression & Custom)
-- [ ] T023 [US2] Implement `WorkflowEngine::performAction()` in `src/Services/WorkflowEngine.php` with transaction support
-- [ ] T024 [US2] Add `requires_comment` validation logic in the perform action flow
+- [x] T019 [P] [US2] Implement `WorkflowInstance` and `WorkflowStepInstance` models in `src/Models/`
+- [x] T020 [P] [US2] Implement `WorkflowAssignment` and `WorkflowHistory` models in `src/Models/`
+- [x] T021 [US2] Implement `ActionResolver` service in `src/Services/ActionResolver.php` (Eligibility -> Gathering -> Availability)
+- [x] T022 [US2] Implement `ConditionEvaluator` service in `src/Services/ConditionEvaluator.php` (Expression & Custom)
+- [x] T023 [US2] Implement `WorkflowEngine::performAction()` in `src/Services/WorkflowEngine.php` with transaction support
+- [x] T024 [US2] Add `requires_comment` validation logic in the perform action flow
 
 ---
 
@@ -87,15 +87,15 @@
 
 ### Tests for User Story 3
 
-- [ ] T025 [P] [US3] Create `tests/Feature/AutomationPipelineTest.php` for handler execution and auto-transitions
-- [ ] T026 [P] [US3] Create `tests/Feature/AutomationFailureTest.php` for error handling and retry logic
+- [x] T025 [P] [US3] Create `tests/Feature/AutomationPipelineTest.php` for handler execution and auto-transitions
+- [x] T026 [P] [US3] Create `tests/Feature/AutomationFailureTest.php` for error handling and retry logic
 
 ### Implementation for User Story 3
 
-- [ ] T027 [US3] Implement handler resolution logic in `src/Services/WorkflowEngine.php` using the service container
-- [ ] T028 [US3] Implement `automatic` and `conditional` transition evaluation by priority in `src/Services/WorkflowEngine.php`
-- [ ] T029 [US3] Implement failure recording and retry mechanism (new step instance) for failed automated steps
-- [ ] T030 [US3] Add automated history logging for system events in `src/Services/WorkflowEngine.php`
+- [x] T027 [US3] Implement handler resolution logic in `src/Services/WorkflowEngine.php` using the service container
+- [x] T028 [US3] Implement `automatic` and `conditional` transition evaluation by priority in `src/Services/WorkflowEngine.php`
+- [x] T029 [US3] Implement failure recording and retry mechanism (new step instance) for failed automated steps
+- [x] T030 [US3] Add automated history logging for system events in `src/Services/WorkflowEngine.php`
 
 ---
 
@@ -103,12 +103,12 @@
 
 **Purpose**: Final refinements and adherence to SOLID/Clean code.
 
-- [ ] T031 [P] Ensure all services are injected via the container (DI) and adhere to Single Responsibility Principle
-- [ ] T032 [P] Implement `LaravelWorkflow` Facade for a clean developer interface
-- [ ] T033 Add multi-tenancy Global Scope to all definition and runtime models
-- [ ] T034 [P] Run `vendor/bin/pint --format agent` on all source files
-- [ ] T035 Create `php artisan workflow:list` and `workflow:check` commands in `src/Commands/`
-- [ ] T036 Final documentation pass on docblocks and PHPDoc types
+- [x] T031 [P] Ensure all services are injected via the container (DI) and adhere to Single Responsibility Principle
+- [x] T032 [P] Implement `LaravelWorkflow` Facade for a clean developer interface
+- [x] T033 Add multi-tenancy Global Scope to all definition and runtime models
+- [x] T034 [P] Run `vendor/bin/pint --format agent` on all source files
+- [x] T035 Create `php artisan workflow:list` and `workflow:check` commands in `src/Commands/`
+- [x] T036 Final documentation pass on docblocks and PHPDoc types
 
 ---
 
