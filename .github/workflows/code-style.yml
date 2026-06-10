@@ -1,0 +1,45 @@
+name: Code Style
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - '003-laravel-workflow-package'
+    paths:
+      - '**.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/code-style.yml'
+  pull_request:
+    paths:
+      - '**.php'
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/code-style.yml'
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  pint:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Run Laravel Pint
+        run: vendor/bin/pint --test

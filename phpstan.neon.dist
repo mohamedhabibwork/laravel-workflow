@@ -7,4 +7,5 @@ parameters:
         - src
         - config
         - database
+        - tests/Models
     tmpDir: build/phpstan

@@ -1,0 +1,48 @@
+name: Security
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+      - 'release/**'
+      - '003-laravel-workflow-package'
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/security.yml'
+  pull_request:
+    paths:
+      - 'composer.json'
+      - 'composer.lock'
+      - '.github/workflows/security.yml'
+  schedule:
+    - cron: '17 3 * * 1'
+
+permissions:
+  contents: read
+
+concurrency:
+  group: ${{ github.workflow }}-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  composer-audit:
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Setup PHP
+        uses: shivammathur/setup-php@v2
+        with:
+          php-version: '8.4'
+          coverage: none
+
+      - name: Install dependencies
+        uses: ramsey/composer-install@v3
+
+      - name: Audit Composer dependencies
+        run: composer audit --locked
