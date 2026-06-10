@@ -39,5 +39,5 @@ jobs:
       - name: Validate composer.json
         run: composer validate --strict
 
-      - name: Check platform requirements
-        run: composer check-platform-reqs --no-dev
+      - name: Validate dependency resolution
+        run: composer update --dry-run --no-install --prefer-dist --no-progress
